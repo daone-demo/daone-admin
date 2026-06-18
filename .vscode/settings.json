@@ -25,9 +25,7 @@
   "[css]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
-  "editor.codeActionsOnSave": {
-    "source.fixAll.eslint": "explicit"
-  },
+  "eslint.enable": false,
   "iconify.excludes": [
     "el"
   ],
@@ -40,5 +38,5 @@
     "v-perms",
     "v-ripple"
   ],
-  "vscodeCustomCodeColor.highlightValueColor": "#b392f0",
+  "vscodeCustomCodeColor.highlightValueColor": "#b392f0"
 }

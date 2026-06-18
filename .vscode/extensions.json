@@ -7,7 +7,6 @@
     "ms-azuretools.vscode-docker",
     "stylelint.vscode-stylelint",
     "bradlc.vscode-tailwindcss",
-    "dbaeumer.vscode-eslint",
     "esbenp.prettier-vscode",
     "redhat.vscode-yaml",
     "csstools.postcss",

@@ -1,6 +1,6 @@
 {
   "Version": "6.2.0",
-  "Title": "PureAdmin",
+  "Title": "Daone 运营后台",
   "FixedHeader": true,
   "HiddenSideBar": false,
   "MultiTagsCache": false,
@@ -15,7 +15,7 @@
   "HideFooter": false,
   "Stretch": false,
   "SidebarStatus": true,
-  "EpThemeColor": "#409EFF",
+  "EpThemeColor": "#6C5CE7",
   "ShowLogo": true,
   "ShowModel": "smart",
   "MenuArrowIconNoTransition": false,
