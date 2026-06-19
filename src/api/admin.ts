@@ -27,7 +27,9 @@ const client = axios.create({
 
 client.interceptors.request.use(config => {
   const token = getToken()?.accessToken;
-  if (token) config.headers.Authorization = `Bearer ${token}`;
+  if (token && !config.headers.Authorization) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
   return config;
 });
 
@@ -36,14 +38,25 @@ let redirectingToLogin = false;
 client.interceptors.response.use(
   response => response,
   async error => {
-    if ((error as AxiosError).response?.status === 401) {
+    const axiosError = error as AxiosError;
+    const status = axiosError.response?.status;
+    const isAdminForbidden =
+      status === 403 && axiosError.config?.url?.startsWith("/admin/");
+
+    if (status === 401 || isAdminForbidden) {
       removeToken();
 
       if (router.currentRoute.value.path !== "/login" && !redirectingToLogin) {
         redirectingToLogin = true;
         const redirect = router.currentRoute.value.fullPath;
         try {
-          await router.replace({ path: "/login", query: { redirect } });
+          await router.replace({
+            path: "/login",
+            query: {
+              redirect,
+              ...(isAdminForbidden ? { reason: "forbidden" } : {})
+            }
+          });
         } finally {
           redirectingToLogin = false;
         }
@@ -63,7 +76,9 @@ const unwrap = async <T>(request: Promise<{ data: AdminApiResponse<T> }>) => {
     const response = (error as AxiosError<AdminApiResponse>).response;
     const message =
       response?.data?.message || (error as Error).message || "接口请求失败";
-    throw new Error(message);
+    const apiError = new Error(message) as Error & { status?: number };
+    apiError.status = response?.status;
+    throw apiError;
   }
 };
 
@@ -83,6 +98,14 @@ export const adminApi = {
       expiresInSeconds: number;
       user: { id: string; nickname: string; avatarUrl?: string };
     }>;
+  },
+  verifyAdminAccess(token: string) {
+    return unwrap(
+      client.get("/admin/v1/users", {
+        params: { page: 1, pageSize: 1 },
+        headers: { Authorization: `Bearer ${token}` }
+      })
+    ) as Promise<AdminPage>;
   },
   users(params: { page?: number; pageSize?: number } = {}) {
     return unwrap(

@@ -2,7 +2,6 @@
 import { reactive, ref } from "vue";
 import { useRouter } from "vue-router";
 import { ElMessage, type FormInstance, type FormRules } from "element-plus";
-import { useUserStoreHook } from "@/store/modules/user";
 import { getTopMenu, initRouter } from "@/router/utils";
 import { adminApi } from "@/api/admin";
 import { setToken } from "@/utils/auth";
@@ -56,30 +55,30 @@ const login = async () => {
   if (!valid) return;
   loading.value = true;
   try {
-    try {
-      const data = await adminApi.smsLogin(form.phone, form.code);
-      setToken({
-        accessToken: data.token,
-        refreshToken: "",
-        expires: new Date(Date.now() + data.expiresInSeconds * 1000),
-        avatar: data.user.avatarUrl || "",
-        username: form.phone,
-        nickname: data.user.nickname,
-        roles: ["admin"],
-        permissions: ["*:*:*"]
-      });
-    } catch (error) {
-      if (!import.meta.env.DEV) throw error;
-      const result = await useUserStoreHook().loginByUsername({
-        username: "admin",
-        phone: form.phone,
-        code: form.code
-      });
-      if (!result.success) throw new Error("登录失败");
-    }
+    const data = await adminApi.smsLogin(form.phone, form.code);
+
+    // 短信登录只证明用户身份；后台接口还要求服务端管理员权限。
+    await adminApi.verifyAdminAccess(data.token);
+
+    setToken({
+      accessToken: data.token,
+      refreshToken: "",
+      expires: new Date(Date.now() + data.expiresInSeconds * 1000),
+      avatar: data.user.avatarUrl || "",
+      username: form.phone,
+      nickname: data.user.nickname,
+      roles: ["admin"],
+      permissions: ["*:*:*"]
+    });
     await initRouter();
     await router.push(getTopMenu(true).path);
     ElMessage.success("欢迎进入 Daone 运营后台");
+  } catch (error: any) {
+    if (error?.status === 403) {
+      ElMessage.error("当前手机号没有后台管理员权限，请联系系统管理员授权");
+    } else {
+      ElMessage.error(error?.message || "登录失败，请稍后重试");
+    }
   } finally {
     loading.value = false;
   }
