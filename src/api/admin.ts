@@ -1,6 +1,7 @@
 import axios from "axios";
 import type { AxiosError } from "axios";
-import { getToken } from "@/utils/auth";
+import router from "@/router";
+import { getToken, removeToken } from "@/utils/auth";
 
 export interface AdminApiResponse<T = unknown> {
   code: string;
@@ -19,8 +20,7 @@ export interface AdminPage<T = Record<string, any>> {
 }
 
 const client = axios.create({
-  baseURL:
-    import.meta.env.VITE_DAONE_API_BASE_URL || "https://api.daoneai.com/api",
+  baseURL: import.meta.env.VITE_DAONE_API_BASE_URL || "/api",
   timeout: 12000,
   headers: { "Content-Type": "application/json" }
 });
@@ -30,6 +30,29 @@ client.interceptors.request.use(config => {
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
+
+let redirectingToLogin = false;
+
+client.interceptors.response.use(
+  response => response,
+  async error => {
+    if ((error as AxiosError).response?.status === 401) {
+      removeToken();
+
+      if (router.currentRoute.value.path !== "/login" && !redirectingToLogin) {
+        redirectingToLogin = true;
+        const redirect = router.currentRoute.value.fullPath;
+        try {
+          await router.replace({ path: "/login", query: { redirect } });
+        } finally {
+          redirectingToLogin = false;
+        }
+      }
+    }
+
+    return Promise.reject(error);
+  }
+);
 
 const unwrap = async <T>(request: Promise<{ data: AdminApiResponse<T> }>) => {
   try {
