@@ -1,6 +1,6 @@
 import { setToken } from "@/utils/auth";
 
-/** 开发预览模式：跳过登录与接口鉴权，使用本地示例数据 */
+/** 预览模式：跳过登录与接口鉴权，使用本地示例数据（开发 / Vercel 部署） */
 export const isPreviewMode = () =>
   import.meta.env.VITE_PREVIEW_MODE === "true" ||
   import.meta.env.VITE_PREVIEW_MODE === true;
