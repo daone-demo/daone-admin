@@ -2,6 +2,7 @@ import axios from "axios";
 import type { AxiosError } from "axios";
 import router from "@/router";
 import { getToken, removeToken } from "@/utils/auth";
+import { isPreviewMode } from "@/utils/preview";
 
 export interface AdminApiResponse<T = unknown> {
   code: string;
@@ -43,7 +44,7 @@ client.interceptors.response.use(
     const isAdminForbidden =
       status === 403 && axiosError.config?.url?.startsWith("/admin/");
 
-    if (status === 401 || isAdminForbidden) {
+    if (!isPreviewMode() && (status === 401 || isAdminForbidden)) {
       removeToken();
 
       if (router.currentRoute.value.path !== "/login" && !redirectingToLogin) {

@@ -5,6 +5,7 @@ import { ElMessage, ElMessageBox } from "element-plus";
 import { resourceConfigs, type ResourceField } from "./resourceData";
 import { adminApi } from "@/api/admin";
 import { getToken } from "@/utils/auth";
+import { isPreviewMode } from "@/utils/preview";
 
 defineOptions({ name: "DaoneResourcePage" });
 
@@ -25,6 +26,8 @@ const apiState = ref<"connected" | "demo" | "unavailable">("demo");
 const apiError = ref("");
 
 const hasAdminToken = () => Boolean(getToken()?.accessToken);
+const shouldUseApi = () =>
+  !isPreviewMode() && Boolean(config.value?.apiResource) && hasAdminToken();
 
 const resetRecords = () => {
   records.value = config.value?.records.map(item => ({ ...item })) || [];
@@ -85,7 +88,7 @@ const normalizeRemoteRows = (items: any[]) => {
 const loadRemote = async () => {
   resetRecords();
   apiError.value = "";
-  if (!config.value?.apiResource || !hasAdminToken()) {
+  if (!shouldUseApi()) {
     apiState.value = config.value?.apiResource ? "demo" : "unavailable";
     return;
   }
@@ -216,11 +219,7 @@ const save = async () => {
     ElMessage.warning(`请填写${missing.label}`);
     return;
   }
-  if (config.value.apiResource) {
-    if (!hasAdminToken()) {
-      ElMessage.error("当前没有有效登录凭证，请重新登录后操作");
-      return;
-    }
+  if (config.value.apiResource && shouldUseApi()) {
     loading.value = true;
     try {
       const payload = toApiPayload();
@@ -282,8 +281,7 @@ const remove = async (row: Record<string, any>) => {
 
 const toggleStatus = async (row: Record<string, any>) => {
   const next = row.status === "启用" ? "停用" : "启用";
-  if (config.value.apiResource) {
-    if (!hasAdminToken()) return ElMessage.error("请重新登录后操作");
+  if (config.value.apiResource && shouldUseApi()) {
     const apiStatus = next === "启用" ? "ENABLED" : "DISABLED";
     try {
       if (resourceKey.value === "users")
@@ -314,8 +312,7 @@ const openPoints = (row: Record<string, any>) => {
 };
 
 const adjustPoints = async () => {
-  if (config.value.apiResource) {
-    if (!hasAdminToken()) return ElMessage.error("请重新登录后操作");
+  if (config.value.apiResource && shouldUseApi()) {
     try {
       await adminApi.adjustUserPoints(
         String(current.value.id),

@@ -36,6 +36,7 @@ import {
   removeToken,
   multipleTabsKey
 } from "@/utils/auth";
+import { isPreviewMode, ensurePreviewSession } from "@/utils/preview";
 
 /** 自动导入全部静态路由，无需再手动引入！匹配 src/router/modules 目录（任何嵌套级别）中具有 .ts 扩展名的所有文件，除了 remaining.ts 文件
  * 如何匹配所有文件请看：https://github.com/mrmlnc/fast-glob#basic-syntax
@@ -133,7 +134,13 @@ router.beforeEach((to: ToRouteType, _from, next) => {
       handleAliveRoute(to);
     }
   }
+  if (isPreviewMode()) {
+    ensurePreviewSession();
+  }
+
   const userInfo = storageLocal().getItem<DataInfo<number>>(userKey);
+  const isAuthenticated =
+    Boolean(Cookies.get(multipleTabsKey) && userInfo) || isPreviewMode();
   const externalLink = isUrl(to?.name as string);
   if (!externalLink) {
     to.matched.some(item => {
@@ -147,7 +154,7 @@ router.beforeEach((to: ToRouteType, _from, next) => {
   function toCorrectRoute() {
     whiteList.includes(to.fullPath) ? next(_from.fullPath) : next();
   }
-  if (Cookies.get(multipleTabsKey) && userInfo) {
+  if (isAuthenticated) {
     // 无权限跳转403页面
     if (to.meta?.roles && !isOneOfArray(to.meta?.roles, userInfo?.roles)) {
       next({ path: "/error/403" });
