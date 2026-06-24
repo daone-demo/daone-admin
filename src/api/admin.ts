@@ -34,13 +34,21 @@ client.interceptors.request.use(config => {
 
 let redirectingToLogin = false;
 
+const publicAdminAuthUrls = ["/admin/v1/sms-codes", "/admin/v1/sms-login"];
+
 client.interceptors.response.use(
   response => response,
   async error => {
     const axiosError = error as AxiosError;
     const status = axiosError.response?.status;
+    const requestUrl = axiosError.config?.url || "";
+    const isPublicAdminAuthUrl = publicAdminAuthUrls.some(url =>
+      requestUrl.startsWith(url)
+    );
     const isAdminForbidden =
-      status === 403 && axiosError.config?.url?.startsWith("/admin/");
+      status === 403 &&
+      requestUrl.startsWith("/admin/") &&
+      !isPublicAdminAuthUrl;
 
     if (status === 401 || isAdminForbidden) {
       removeToken();
@@ -84,14 +92,14 @@ const unwrap = async <T>(request: Promise<{ data: AdminApiResponse<T> }>) => {
 export const adminApi = {
   sendSmsCode(phone: string) {
     return unwrap(
-      client.post("/v1/auth/sms-codes", { phone, scene: "LOGIN" })
+      client.post("/admin/v1/sms-codes", { phone, scene: "LOGIN" })
     ) as Promise<{
       retryAfterSeconds: number;
     }>;
   },
   smsLogin(phone: string, code: string) {
     return unwrap(
-      client.post("/v1/auth/sms-login", { phone, code })
+      client.post("/admin/v1/sms-login", { phone, code })
     ) as Promise<{
       token: string;
       expiresInSeconds: number;

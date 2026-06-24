@@ -29,20 +29,19 @@ const sendCode = async () => {
   try {
     await adminApi.sendSmsCode(form.phone);
     ElMessage.success("验证码已发送");
-  } catch {
-    if (!import.meta.env.DEV) {
-      ElMessage.error("验证码发送失败，请稍后重试");
-      sending.value = false;
-      return;
-    }
-    ElMessage.success("开发环境验证码为 123456");
-  } finally {
-    sending.value = false;
     countdown.value = 60;
     const timer = window.setInterval(() => {
       countdown.value -= 1;
       if (countdown.value <= 0) window.clearInterval(timer);
     }, 1000);
+  } catch (error: any) {
+    if (error?.status === 403) {
+      ElMessage.error("当前手机号没有后台登录权限，请联系系统管理员授权");
+    } else {
+      ElMessage.error(error?.message || "验证码发送失败，请稍后重试");
+    }
+  } finally {
+    sending.value = false;
   }
 };
 
