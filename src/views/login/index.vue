@@ -5,7 +5,6 @@ import { ElMessage, type FormInstance, type FormRules } from "element-plus";
 import { getTopMenu, initRouter } from "@/router/utils";
 import { adminApi } from "@/api/admin";
 import { setToken } from "@/utils/auth";
-import { ensurePreviewSession, isPreviewMode } from "@/utils/preview";
 
 defineOptions({ name: "Login" });
 
@@ -47,18 +46,7 @@ const sendCode = async () => {
   }
 };
 
-const enterPreview = async () => {
-  ensurePreviewSession();
-  await initRouter();
-  await router.push(getTopMenu(true).path);
-  ElMessage.success("预览模式：已跳过登录与接口校验");
-};
-
 const login = async () => {
-  if (isPreviewMode()) {
-    await enterPreview();
-    return;
-  }
   if (!accepted.value) {
     ElMessage.warning("请先同意服务协议与隐私政策");
     return;
@@ -131,13 +119,7 @@ const login = async () => {
         </div>
         <span class="welcome-label">WELCOME BACK</span>
         <h2>登录运营后台</h2>
-        <p class="hint">
-          {{
-            isPreviewMode()
-              ? "预览模式已开启，可直接进入后台浏览全部页面"
-              : "使用管理员手机号验证身份"
-          }}
-        </p>
+        <p class="hint">使用管理员手机号验证身份</p>
         <el-form
           ref="formRef"
           :model="form"
@@ -189,16 +171,8 @@ const login = async () => {
             :loading="loading"
             @click="login"
           >
-            {{ isPreviewMode() ? "进入预览" : "登录" }}
+            登录
             <IconifyIconOnline icon="ri:arrow-right-line" />
-          </el-button>
-          <el-button
-            v-if="isPreviewMode()"
-            class="preview-button"
-            plain
-            @click="enterPreview"
-          >
-            跳过验证，直接预览
           </el-button>
         </el-form>
         <div class="secure-tip">
@@ -384,13 +358,6 @@ const login = async () => {
 
 .login-button svg {
   margin-left: 7px;
-}
-
-.preview-button {
-  width: 100%;
-  height: 44px;
-  margin-top: 12px;
-  border-radius: 11px;
 }
 
 .secure-tip {

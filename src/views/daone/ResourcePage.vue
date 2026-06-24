@@ -5,8 +5,6 @@ import { ElMessage, ElMessageBox } from "element-plus";
 import { resourceConfigs, type ResourceField } from "./resourceData";
 import { adminApi } from "@/api/admin";
 import { getToken } from "@/utils/auth";
-import { isPreviewMode } from "@/utils/preview";
-
 defineOptions({ name: "DaoneResourcePage" });
 
 const route = useRoute();
@@ -27,7 +25,7 @@ const apiError = ref("");
 
 const hasAdminToken = () => Boolean(getToken()?.accessToken);
 const shouldUseApi = () =>
-  !isPreviewMode() && Boolean(config.value?.apiResource) && hasAdminToken();
+  Boolean(config.value?.apiResource) && hasAdminToken();
 
 const resetRecords = () => {
   records.value = config.value?.records.map(item => ({ ...item })) || [];
