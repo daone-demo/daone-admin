@@ -10,6 +10,7 @@ import {
 } from "./build/utils";
 
 export default ({ mode }: ConfigEnv): UserConfigExport => {
+  const env = loadEnv(mode, process.cwd(), "");
   const { VITE_CDN, VITE_PORT, VITE_COMPRESSION, VITE_PUBLIC_PATH } =
     wrapperEnv(loadEnv(mode, root));
   return {
@@ -26,7 +27,7 @@ export default ({ mode }: ConfigEnv): UserConfigExport => {
       // 本地跨域代理 https://cn.vitejs.dev/config/server-options.html#server-proxy
       proxy: {
         "/api": {
-          target: "https://api.daoneai.com",
+          target: env.VITE_API_BASE_HOST,
           changeOrigin: true,
           secure: true
         }
