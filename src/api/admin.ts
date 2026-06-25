@@ -119,6 +119,9 @@ export const adminApi = {
       client.get("/admin/v1/users", { params })
     ) as Promise<AdminPage>;
   },
+  dashboard() {
+    return unwrap(client.get("/admin/v1/dashboard"));
+  },
   updateUserStatus(userId: string, status: string) {
     return unwrap(
       client.patch(`/admin/v1/users/${encodeURIComponent(userId)}/status`, {
@@ -137,10 +140,28 @@ export const adminApi = {
       )
     );
   },
-  orders(params: { status?: string; page?: number; pageSize?: number } = {}) {
+  userDetail(userId: string) {
+    return unwrap(client.get(`/admin/v1/users/${encodeURIComponent(userId)}`));
+  },
+  orders(
+    params: {
+      keyword?: string;
+      status?: string;
+      payType?: string;
+      dateFrom?: string;
+      dateTo?: string;
+      page?: number;
+      pageSize?: number;
+    } = {}
+  ) {
     return unwrap(
       client.get("/admin/v1/orders", { params })
     ) as Promise<AdminPage>;
+  },
+  orderDetail(orderNo: string) {
+    return unwrap(
+      client.get(`/admin/v1/orders/${encodeURIComponent(orderNo)}`)
+    );
   },
   plans() {
     return unwrap(client.get("/admin/v1/plans")) as Promise<
@@ -160,6 +181,11 @@ export const adminApi = {
       client.patch(`/admin/v1/plans/${encodeURIComponent(planCode)}/status`, {
         status
       })
+    );
+  },
+  planDetail(planCode: string) {
+    return unwrap(
+      client.get(`/admin/v1/plans/${encodeURIComponent(planCode)}`)
     );
   },
   models() {
@@ -183,6 +209,11 @@ export const adminApi = {
       )
     );
   },
+  modelDetail(modelCode: string) {
+    return unwrap(
+      client.get(`/admin/v1/model-configs/${encodeURIComponent(modelCode)}`)
+    );
+  },
   promptTemplates() {
     return unwrap(client.get("/admin/v1/prompt-templates")) as Promise<
       { items?: any[] } | any[]
@@ -196,6 +227,21 @@ export const adminApi = {
       client.put(`/admin/v1/prompt-templates/${encodeURIComponent(code)}`, data)
     );
   },
+  promptTemplateDetail(code: string) {
+    return unwrap(
+      client.get(`/admin/v1/prompt-templates/${encodeURIComponent(code)}`)
+    );
+  },
+  updatePromptTemplateStatus(code: string, status: string) {
+    return unwrap(
+      client.patch(
+        `/admin/v1/prompt-templates/${encodeURIComponent(code)}/status`,
+        {
+          status
+        }
+      )
+    );
+  },
   inspirations() {
     return unwrap(client.get("/admin/v1/inspirations")) as Promise<
       { items?: any[] } | any[]
@@ -207,6 +253,112 @@ export const adminApi = {
   updateInspiration(id: string, data: Record<string, any>) {
     return unwrap(
       client.put(`/admin/v1/inspirations/${encodeURIComponent(id)}`, data)
+    );
+  },
+  inspirationDetail(id: string) {
+    return unwrap(
+      client.get(`/admin/v1/inspirations/${encodeURIComponent(id)}`)
+    );
+  },
+  updateInspirationStatus(id: string, status: string) {
+    return unwrap(
+      client.patch(`/admin/v1/inspirations/${encodeURIComponent(id)}/status`, {
+        status
+      })
+    );
+  },
+  categories(
+    params: { keyword?: string; status?: string; scope?: string } = {}
+  ) {
+    return unwrap(client.get("/admin/v1/categories", { params })) as Promise<
+      { items?: any[] } | any[]
+    >;
+  },
+  createCategory(data: Record<string, any>) {
+    return unwrap(client.post("/admin/v1/categories", data));
+  },
+  updateCategory(code: string, data: Record<string, any>) {
+    return unwrap(
+      client.put(`/admin/v1/categories/${encodeURIComponent(code)}`, data)
+    );
+  },
+  deleteCategory(code: string) {
+    return unwrap(
+      client.delete(`/admin/v1/categories/${encodeURIComponent(code)}`)
+    );
+  },
+  updateCategoryStatus(code: string, status: string) {
+    return unwrap(
+      client.patch(`/admin/v1/categories/${encodeURIComponent(code)}/status`, {
+        status
+      })
+    );
+  },
+  workflows(
+    params: {
+      keyword?: string;
+      status?: string;
+      categoryCode?: string;
+      page?: number;
+      pageSize?: number;
+    } = {}
+  ) {
+    return unwrap(
+      client.get("/admin/v1/workflows", { params })
+    ) as Promise<AdminPage>;
+  },
+  createWorkflow(data: Record<string, any>) {
+    return unwrap(client.post("/admin/v1/workflows", data));
+  },
+  updateWorkflow(workflowId: string, data: Record<string, any>) {
+    return unwrap(
+      client.put(`/admin/v1/workflows/${encodeURIComponent(workflowId)}`, data)
+    );
+  },
+  deleteWorkflow(workflowId: string) {
+    return unwrap(
+      client.delete(`/admin/v1/workflows/${encodeURIComponent(workflowId)}`)
+    );
+  },
+  updateWorkflowStatus(workflowId: string, status: string) {
+    return unwrap(
+      client.patch(
+        `/admin/v1/workflows/${encodeURIComponent(workflowId)}/status`,
+        {
+          status
+        }
+      )
+    );
+  },
+  invoices(
+    params: {
+      keyword?: string;
+      status?: string;
+      invoiceType?: string;
+      dateFrom?: string;
+      dateTo?: string;
+      page?: number;
+      pageSize?: number;
+    } = {}
+  ) {
+    return unwrap(
+      client.get("/admin/v1/invoices", { params })
+    ) as Promise<AdminPage>;
+  },
+  createInvoice(data: Record<string, any>) {
+    return unwrap(client.post("/admin/v1/invoices", data));
+  },
+  updateInvoice(invoiceId: string, data: Record<string, any>) {
+    return unwrap(
+      client.put(`/admin/v1/invoices/${encodeURIComponent(invoiceId)}`, data)
+    );
+  },
+  updateInvoiceStatus(invoiceId: string, data: Record<string, any>) {
+    return unwrap(
+      client.patch(
+        `/admin/v1/invoices/${encodeURIComponent(invoiceId)}/status`,
+        data
+      )
     );
   }
 };

@@ -15,12 +15,15 @@ export interface ResourceConfig {
   color: string;
   endpoint?: string;
   apiResource?:
+    | "workflows"
     | "users"
+    | "invoices"
     | "orders"
     | "plans"
     | "models"
     | "prompts"
-    | "inspirations";
+    | "inspirations"
+    | "categories";
   allowCreate?: boolean;
   allowDelete?: boolean;
   allowStatus?: boolean;
@@ -39,25 +42,34 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
     description: "维护创作工作流、封面与画布节点配置",
     icon: "ri:flow-chart",
     color: "#6c5ce7",
-    endpoint: "GET /v1/workflows（暂无 /admin 接口）",
+    endpoint: "GET/POST /admin/v1/workflows",
+    apiResource: "workflows",
+    allowDelete: true,
+    allowStatus: true,
     createText: "新建工作流",
-    searchable: ["name", "description", "owner"],
+    searchable: ["name", "description", "categoryCode", "categoryName"],
     fields: [
       { key: "name", label: "工作流名称", required: true },
       { key: "description", label: "工作流说明", type: "textarea" },
       {
-        key: "category",
-        label: "适用场景",
+        key: "categoryCode",
+        label: "分类编码",
         type: "select",
-        options: ["品牌设计", "海报广告", "电商营销", "视频分镜"]
+        options: ["BRAND", "POSTER", "ECOMMERCE", "VIDEO"]
       },
-      { key: "nodeCount", label: "节点数量", type: "number" }
+      { key: "categoryName", label: "分类名称" },
+      {
+        key: "workflowDataText",
+        label: "工作流 JSON",
+        type: "textarea",
+        required: true
+      }
     ],
     columns: [
       { key: "name", label: "工作流" },
-      { key: "category", label: "场景" },
+      { key: "categoryName", label: "场景" },
+      { key: "categoryCode", label: "分类编码" },
       { key: "nodeCount", label: "节点数", width: 100 },
-      { key: "owner", label: "创建人" },
       { key: "updatedAt", label: "更新时间" },
       { key: "status", label: "状态", width: 100 }
     ],
@@ -66,7 +78,9 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
         id: "WF-1024",
         name: "电商主图批量生成",
         description: "商品图上传、抠图、场景生成与导出",
-        category: "电商营销",
+        categoryCode: "ECOMMERCE",
+        categoryName: "电商营销",
+        workflowDataText: "{}",
         nodeCount: 12,
         owner: "运营管理员",
         updatedAt: "2026-06-18 11:26",
@@ -76,7 +90,9 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
         id: "WF-1023",
         name: "品牌海报工作流",
         description: "品牌信息到多尺寸活动海报",
-        category: "海报广告",
+        categoryCode: "POSTER",
+        categoryName: "海报广告",
+        workflowDataText: "{}",
         nodeCount: 9,
         owner: "设计运营",
         updatedAt: "2026-06-17 16:40",
@@ -86,7 +102,9 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
         id: "WF-1022",
         name: "短视频分镜生成",
         description: "脚本拆解、分镜图与视频片段生成",
-        category: "视频分镜",
+        categoryCode: "VIDEO",
+        categoryName: "视频分镜",
+        workflowDataText: "{}",
         nodeCount: 18,
         owner: "内容运营",
         updatedAt: "2026-06-16 09:15",
@@ -162,56 +180,68 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
     description: "审核开票申请并维护发票开具与寄送状态",
     icon: "ri:bill-line",
     color: "#00b894",
-    endpoint: "暂未提供 /admin 开票接口",
-    searchable: ["id", "company", "orderNo"],
+    endpoint: "GET/POST /admin/v1/invoices",
+    apiResource: "invoices",
+    allowDelete: false,
+    allowStatus: true,
+    createText: "新增开票申请",
+    searchable: ["id", "invoiceTitle", "orderNo", "userId"],
     fields: [
-      { key: "company", label: "发票抬头", required: true },
+      { key: "userId", label: "用户 ID", required: true },
+      { key: "orderNo", label: "订单号", required: true },
+      { key: "invoiceTitle", label: "发票抬头", required: true },
       { key: "taxNo", label: "税号", required: true },
-      { key: "amount", label: "开票金额", type: "number" },
       {
-        key: "type",
+        key: "invoiceType",
         label: "发票类型",
         type: "select",
-        options: ["增值税普通发票", "增值税专用发票"]
-      }
+        options: ["VAT_NORMAL", "VAT_SPECIAL"]
+      },
+      { key: "amountFen", label: "开票金额（分）", type: "number" }
     ],
     columns: [
       { key: "id", label: "申请编号" },
-      { key: "company", label: "发票抬头" },
+      { key: "invoiceTitle", label: "发票抬头" },
       { key: "orderNo", label: "关联订单" },
-      { key: "type", label: "类型" },
-      { key: "amount", label: "金额（元）" },
+      { key: "invoiceType", label: "类型" },
+      { key: "amountYuan", label: "金额（元）" },
       { key: "appliedAt", label: "申请时间" },
       { key: "status", label: "状态", width: 110 }
     ],
     records: [
       {
         id: "INV-26061801",
-        company: "杭州星图创意有限公司",
+        invoiceTitle: "杭州星图创意有限公司",
+        userId: "10001",
         taxNo: "913301********221X",
         orderNo: "DN20260618001",
-        type: "增值税普通发票",
-        amount: 5999,
+        invoiceType: "VAT_NORMAL",
+        amountFen: 599900,
+        amountYuan: 5999,
         appliedAt: "2026-06-18 10:21",
         status: "待开票"
       },
       {
         id: "INV-26061703",
-        company: "上海一格品牌设计有限公司",
+        invoiceTitle: "上海一格品牌设计有限公司",
+        userId: "10002",
         taxNo: "913101********08XK",
         orderNo: "DN20260617018",
-        type: "增值税专用发票",
-        amount: 12999,
+        invoiceType: "VAT_SPECIAL",
+        amountFen: 1299900,
+        amountYuan: 12999,
         appliedAt: "2026-06-17 15:08",
         status: "开票中"
       },
       {
         id: "INV-26061605",
-        company: "深圳像素文化科技有限公司",
+        invoiceTitle: "深圳像素文化科技有限公司",
+        userId: "10003",
         taxNo: "914403********91A2",
         orderNo: "DN20260616009",
-        type: "增值税普通发票",
-        amount: 8999,
+        invoiceType: "VAT_NORMAL",
+        amountFen: 899900,
+        amountYuan: 8999,
         appliedAt: "2026-06-16 13:50",
         status: "已开票"
       }
@@ -441,63 +471,66 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
     description: "管理灵感发现与模板内容的分类层级",
     icon: "ri:folder-3-line",
     color: "#00cec9",
-    endpoint: "暂未提供 /admin 分类接口",
+    endpoint: "GET/POST /admin/v1/categories",
+    apiResource: "categories",
     createText: "新增分类",
-    searchable: ["name", "code"],
+    allowDelete: true,
+    allowStatus: true,
+    searchable: ["categoryName", "categoryCode", "scope"],
     fields: [
-      { key: "name", label: "分类名称", required: true },
-      { key: "code", label: "分类编码", required: true },
+      { key: "categoryName", label: "分类名称", required: true },
+      { key: "categoryCode", label: "分类编码", required: true },
       {
         key: "scope",
         label: "使用范围",
         type: "select",
-        options: ["灵感发现", "模板中心", "全部"]
+        options: ["ALL", "INSPIRATION", "TEMPLATE"]
       },
-      { key: "sort", label: "排序", type: "number" }
+      { key: "sortNo", label: "排序", type: "number" }
     ],
     columns: [
-      { key: "name", label: "分类名称" },
-      { key: "code", label: "分类编码" },
+      { key: "categoryName", label: "分类名称" },
+      { key: "categoryCode", label: "分类编码" },
       { key: "scope", label: "使用范围" },
       { key: "contentCount", label: "内容数" },
-      { key: "sort", label: "排序" },
+      { key: "sortNo", label: "排序" },
       { key: "status", label: "状态", width: 100 }
     ],
     records: [
       {
         id: "C-01",
-        name: "品牌设计",
-        code: "BRAND",
-        scope: "全部",
+        categoryName: "品牌设计",
+        categoryCode: "BRAND",
+        scope: "ALL",
         contentCount: 128,
-        sort: 10,
+        sortNo: 10,
         status: status()
       },
       {
         id: "C-02",
-        name: "海报与广告",
-        code: "POSTER",
-        scope: "全部",
+        categoryName: "海报与广告",
+        categoryCode: "POSTER",
+        scope: "ALL",
         contentCount: 96,
-        sort: 20,
+        sortNo: 20,
         status: status()
       },
       {
         id: "C-03",
-        name: "插画",
-        code: "ILLUSTRATION",
-        scope: "灵感发现",
+        categoryName: "插画",
+        categoryCode: "ILLUSTRATION",
+        scope: "INSPIRATION",
         contentCount: 74,
-        sort: 30,
+        sortNo: 30,
         status: status()
       },
       {
         id: "C-04",
-        name: "视频与分镜",
-        code: "VIDEO",
-        scope: "模板中心",
+        categoryName: "视频与分镜",
+        categoryCode: "VIDEO",
+        scope: "TEMPLATE",
         contentCount: 32,
-        sort: 40,
+        sortNo: 40,
         status: status()
       }
     ]

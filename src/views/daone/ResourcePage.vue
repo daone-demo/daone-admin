@@ -37,6 +37,9 @@ const normalizeList = (payload: any) =>
   Array.isArray(payload) ? payload : payload?.items || payload?.records || [];
 
 const normalizeRemoteRows = (items: any[]) => {
+  const normalizeStatus = (value: string) =>
+    value === "DISABLED" ? "停用" : value === "ENABLED" ? "启用" : value;
+
   if (resourceKey.value === "users") {
     return items.map(item => ({
       ...item,
@@ -48,6 +51,13 @@ const normalizeRemoteRows = (items: any[]) => {
     return items.map(item => ({
       ...item,
       id: item.orderNo,
+      amountYuan: Number(item.amountFen || 0) / 100
+    }));
+  }
+  if (resourceKey.value === "invoices") {
+    return items.map(item => ({
+      ...item,
+      id: item.id || item.invoiceId,
       amountYuan: Number(item.amountFen || 0) / 100
     }));
   }
@@ -76,10 +86,26 @@ const normalizeRemoteRows = (items: any[]) => {
       status: item.status === "ENABLED" ? "启用" : "停用"
     }));
   }
+  if (resourceKey.value === "workflows") {
+    return items.map(item => ({
+      ...item,
+      id: item.id || item.workflowId,
+      workflowDataText: JSON.stringify(item.workflowData || {}, null, 2),
+      nodeCount: item.nodeCount ?? Object.keys(item.workflowData || {}).length,
+      status: normalizeStatus(item.status)
+    }));
+  }
+  if (resourceKey.value === "categories") {
+    return items.map(item => ({
+      ...item,
+      id: item.id || item.categoryCode,
+      status: normalizeStatus(item.status)
+    }));
+  }
   return items.map(item => ({
     ...item,
     id: item.id || item.code,
-    status: item.status === "DISABLED" ? "停用" : "启用"
+    status: normalizeStatus(item.status || "ENABLED")
   }));
 };
 
@@ -93,8 +119,12 @@ const loadRemote = async () => {
   loading.value = true;
   try {
     let payload: any;
+    if (config.value.apiResource === "workflows")
+      payload = await adminApi.workflows({ page: 1, pageSize: 100 });
     if (config.value.apiResource === "users")
       payload = await adminApi.users({ page: 1, pageSize: 100 });
+    if (config.value.apiResource === "invoices")
+      payload = await adminApi.invoices({ page: 1, pageSize: 100 });
     if (config.value.apiResource === "orders")
       payload = await adminApi.orders({ page: 1, pageSize: 100 });
     if (config.value.apiResource === "plans") payload = await adminApi.plans();
@@ -104,6 +134,8 @@ const loadRemote = async () => {
       payload = await adminApi.promptTemplates();
     if (config.value.apiResource === "inspirations")
       payload = await adminApi.inspirations();
+    if (config.value.apiResource === "categories")
+      payload = await adminApi.categories();
     records.value = normalizeRemoteRows(normalizeList(payload));
     apiState.value = "connected";
   } catch (error: any) {
@@ -190,6 +222,39 @@ const toApiPayload = () => {
       }
     };
   }
+  if (resourceKey.value === "workflows") {
+    let workflowData: Record<string, any>;
+    try {
+      workflowData = JSON.parse(String(form.workflowDataText || "{}"));
+    } catch {
+      throw new Error("工作流 JSON 格式不正确");
+    }
+    return {
+      name: form.name,
+      description: form.description,
+      categoryCode: form.categoryCode,
+      categoryName: form.categoryName,
+      workflowData
+    };
+  }
+  if (resourceKey.value === "categories") {
+    return {
+      categoryCode: form.categoryCode,
+      categoryName: form.categoryName,
+      scope: form.scope || "ALL",
+      sortNo: Number(form.sortNo || 0)
+    };
+  }
+  if (resourceKey.value === "invoices") {
+    return {
+      userId: form.userId,
+      orderNo: form.orderNo,
+      invoiceTitle: form.invoiceTitle,
+      taxNo: form.taxNo,
+      invoiceType: form.invoiceType || "VAT_NORMAL",
+      amountFen: Number(form.amountFen || 0)
+    };
+  }
   if (resourceKey.value === "prompts") {
     return {
       code: form.code,
@@ -221,6 +286,11 @@ const save = async () => {
     loading.value = true;
     try {
       const payload = toApiPayload();
+      if (resourceKey.value === "workflows") {
+        editingId.value
+          ? await adminApi.updateWorkflow(editingId.value, payload)
+          : await adminApi.createWorkflow(payload);
+      }
       if (resourceKey.value === "plans") {
         editingId.value
           ? await adminApi.updatePlan(String(form.planCode), payload)
@@ -237,6 +307,16 @@ const save = async () => {
         editingId.value
           ? await adminApi.updateInspiration(editingId.value, payload)
           : await adminApi.createInspiration(payload);
+      }
+      if (resourceKey.value === "categories") {
+        editingId.value
+          ? await adminApi.updateCategory(String(form.categoryCode), payload)
+          : await adminApi.createCategory(payload);
+      }
+      if (resourceKey.value === "invoices") {
+        editingId.value
+          ? await adminApi.updateInvoice(editingId.value, payload)
+          : await adminApi.createInvoice(payload);
       }
       await loadRemote();
       dialogVisible.value = false;
@@ -273,6 +353,20 @@ const remove = async (row: Record<string, any>) => {
       type: "warning"
     }
   );
+  if (config.value.apiResource && shouldUseApi()) {
+    try {
+      if (resourceKey.value === "workflows")
+        await adminApi.deleteWorkflow(String(row.id));
+      if (resourceKey.value === "categories")
+        await adminApi.deleteCategory(String(row.categoryCode));
+      await loadRemote();
+      ElMessage.success("删除成功");
+      return;
+    } catch (error: any) {
+      ElMessage.error(error?.message || "删除失败");
+      return;
+    }
+  }
   records.value = records.value.filter(item => item.id !== row.id);
   ElMessage.success("删除成功");
 };
@@ -288,6 +382,17 @@ const toggleStatus = async (row: Record<string, any>) => {
         await adminApi.updatePlanStatus(String(row.planCode), apiStatus);
       if (resourceKey.value === "models")
         await adminApi.updateModelStatus(String(row.modelCode), apiStatus);
+      if (resourceKey.value === "prompts")
+        await adminApi.updatePromptTemplateStatus(String(row.code), apiStatus);
+      if (resourceKey.value === "inspirations")
+        await adminApi.updateInspirationStatus(String(row.id), apiStatus);
+      if (resourceKey.value === "categories")
+        await adminApi.updateCategoryStatus(
+          String(row.categoryCode),
+          apiStatus
+        );
+      if (resourceKey.value === "workflows")
+        await adminApi.updateWorkflowStatus(String(row.id), apiStatus);
     } catch (error: any) {
       ElMessage.error(error?.message || "状态更新失败");
       return;
@@ -328,17 +433,31 @@ const adjustPoints = async () => {
   ElMessage.success("积分调整成功，流水已记录");
 };
 
-const handleInvoice = (row: Record<string, any>) => {
-  row.status = row.status === "待开票" ? "开票中" : "已开票";
-  ElMessage.success(row.status === "开票中" ? "已进入开票流程" : "已完成开票");
+const handleInvoice = async (row: Record<string, any>) => {
+  const next =
+    row.status === "ISSUED" || row.status === "已开票" ? "PENDING" : "ISSUED";
+  if (config.value.apiResource && shouldUseApi()) {
+    try {
+      await adminApi.updateInvoiceStatus(String(row.id), { status: next });
+      await loadRemote();
+      ElMessage.success(next === "ISSUED" ? "已完成开票" : "已退回待处理");
+      return;
+    } catch (error: any) {
+      ElMessage.error(error?.message || "开票状态更新失败");
+      return;
+    }
+  }
+  row.status = next;
+  ElMessage.success(next === "ISSUED" ? "已完成开票" : "已退回待处理");
 };
 
 const statusType = (value: string) => {
-  if (["启用", "已支付", "已开票", "PAID", "ENABLED"].includes(value))
+  if (["启用", "已支付", "已开票", "PAID", "ENABLED", "ISSUED"].includes(value))
     return "success";
-  if (["待支付", "待开票", "PENDING", "PAYING"].includes(value))
+  if (["待支付", "待开票", "PENDING", "PAYING", "PROCESSING"].includes(value))
     return "warning";
-  if (["停用", "已取消"].includes(value)) return "danger";
+  if (["停用", "已取消", "REJECTED", "CANCELED"].includes(value))
+    return "danger";
   return "primary";
 };
 
@@ -453,9 +572,15 @@ const inputType = (field: ResourceField) =>
           <template #default="{ row }">
             <div
               v-if="
-                ['name', 'title', 'nickname', 'modelName', 'planName'].includes(
-                  column.key
-                )
+                [
+                  'name',
+                  'title',
+                  'nickname',
+                  'modelName',
+                  'planName',
+                  'categoryName',
+                  'invoiceTitle'
+                ].includes(column.key)
               "
               class="primary-cell"
             >
@@ -510,14 +635,18 @@ const inputType = (field: ResourceField) =>
             >
               调整积分
             </el-button>
-            <el-button
-              v-else-if="resourceKey === 'invoices'"
-              link
-              type="primary"
-              @click="handleInvoice(row)"
-            >
-              {{ row.status === "待开票" ? "去开票" : "更新状态" }}
-            </el-button>
+            <template v-else-if="resourceKey === 'invoices'">
+              <el-button link type="primary" @click="openEditor(row)"
+                >编辑</el-button
+              >
+              <el-button link type="primary" @click="handleInvoice(row)">
+                {{
+                  row.status === "ISSUED" || row.status === "已开票"
+                    ? "退回待处理"
+                    : "完成开票"
+                }}
+              </el-button>
+            </template>
             <template v-else-if="resourceKey !== 'orders'">
               <el-button link type="primary" @click="openEditor(row)"
                 >编辑</el-button
