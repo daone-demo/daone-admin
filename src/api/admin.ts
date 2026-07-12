@@ -34,7 +34,7 @@ client.interceptors.request.use(config => {
 
 let redirectingToLogin = false;
 
-const publicAdminAuthUrls = ["/admin/v1/sms-codes", "/admin/v1/sms-login"];
+const publicAdminAuthUrls = ["/admin/v1/sms-code", "/admin/v1/sms-login"];
 
 client.interceptors.response.use(
   response => response,
@@ -77,12 +77,12 @@ client.interceptors.response.use(
 const unwrap = async <T>(request: Promise<{ data: AdminApiResponse<T> }>) => {
   try {
     const { data } = await request;
-    if (data.code !== "OK") throw new Error(data.message || "接口请求失败");
+    if (data.code !== "OK") throw new Error(data.message || "接口请求失败1");
     return data.data;
   } catch (error) {
     const response = (error as AxiosError<AdminApiResponse>).response;
     const message =
-      response?.data?.message || (error as Error).message || "接口请求失败";
+      response?.data?.message || (error as Error).message || "接口请求失败2";
     const apiError = new Error(message) as Error & { status?: number };
     apiError.status = response?.status;
     throw apiError;
@@ -92,7 +92,7 @@ const unwrap = async <T>(request: Promise<{ data: AdminApiResponse<T> }>) => {
 export const adminApi = {
   sendSmsCode(phone: string) {
     return unwrap(
-      client.post("/admin/v1/sms-codes", { phone, scene: "LOGIN" })
+      client.post("/admin/v1/sms-code", { phone, scene: "LOGIN" })
     ) as Promise<{
       retryAfterSeconds: number;
     }>;
@@ -189,7 +189,7 @@ export const adminApi = {
     );
   },
   models() {
-    return unwrap(client.get("/admin/v1/model-configs")) as Promise<
+    return unwrap(client.get("/admin/v1/model-config")) as Promise<
       { items?: any[] } | any[]
     >;
   },
