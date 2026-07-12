@@ -19,7 +19,7 @@ export interface AdminPage<T = Record<string, any>> {
 }
 
 const client = axios.create({
-  baseURL: import.meta.env.VITE_DAONE_API_BASE_URL || "/api",
+  baseURL: "https://dev.meilian.pangguimi.com/daone_dev/api",
   timeout: 12000,
   headers: { "Content-Type": "application/json" }
 });
