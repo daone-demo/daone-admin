@@ -124,7 +124,7 @@ export const adminApi = {
   },
   updateUserStatus(userId: string, status: string) {
     return unwrap(
-      client.patch(`/admin/v1/users/${encodeURIComponent(userId)}/status`, {
+      client.put(`/admin/v1/users/${encodeURIComponent(userId)}/status`, {
         status
       })
     );
@@ -178,7 +178,7 @@ export const adminApi = {
   },
   updatePlanStatus(planCode: string, status: string) {
     return unwrap(
-      client.patch(`/admin/v1/plans/${encodeURIComponent(planCode)}/status`, {
+      client.put(`/admin/v1/plans/${encodeURIComponent(planCode)}/status`, {
         status
       })
     );
@@ -203,7 +203,7 @@ export const adminApi = {
   },
   updateModelStatus(modelCode: string, status: string) {
     return unwrap(
-      client.patch(
+      client.put(
         `/admin/v1/model-configs/${encodeURIComponent(modelCode)}/status`,
         { status }
       )
@@ -234,7 +234,7 @@ export const adminApi = {
   },
   updatePromptTemplateStatus(code: string, status: string) {
     return unwrap(
-      client.patch(
+      client.put(
         `/admin/v1/prompt-templates/${encodeURIComponent(code)}/status`,
         {
           status
@@ -262,7 +262,7 @@ export const adminApi = {
   },
   updateInspirationStatus(id: string, status: string) {
     return unwrap(
-      client.patch(`/admin/v1/inspirations/${encodeURIComponent(id)}/status`, {
+      client.put(`/admin/v1/inspirations/${encodeURIComponent(id)}/status`, {
         status
       })
     );
@@ -289,7 +289,7 @@ export const adminApi = {
   },
   updateCategoryStatus(code: string, status: string) {
     return unwrap(
-      client.patch(`/admin/v1/categories/${encodeURIComponent(code)}/status`, {
+      client.put(`/admin/v1/categories/${encodeURIComponent(code)}/status`, {
         status
       })
     );
@@ -322,7 +322,7 @@ export const adminApi = {
   },
   updateWorkflowStatus(workflowId: string, status: string) {
     return unwrap(
-      client.patch(
+      client.put(
         `/admin/v1/workflows/${encodeURIComponent(workflowId)}/status`,
         {
           status
@@ -355,7 +355,7 @@ export const adminApi = {
   },
   updateInvoiceStatus(invoiceId: string, data: Record<string, any>) {
     return unwrap(
-      client.patch(
+      client.put(
         `/admin/v1/invoices/${encodeURIComponent(invoiceId)}/status`,
         data
       )
