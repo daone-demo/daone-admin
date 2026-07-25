@@ -6,6 +6,8 @@ export interface ResourceField {
   type?: FieldType;
   options?: string[];
   required?: boolean;
+  /** 仅在新增时展示，编辑时隐藏（如模型编码） */
+  createOnly?: boolean;
 }
 
 export interface ResourceConfig {
@@ -20,6 +22,7 @@ export interface ResourceConfig {
     | "invoices"
     | "orders"
     | "plans"
+    | "pointPackages"
     | "models"
     | "prompts"
     | "inspirations"
@@ -29,8 +32,15 @@ export interface ResourceConfig {
   allowStatus?: boolean;
   createText?: string;
   searchable?: string[];
+  /** 表格列均分铺满容器宽度 */
+  tableFullWidth?: boolean;
   fields: ResourceField[];
-  columns: Array<{ key: string; label: string; width?: number }>;
+  columns: Array<{
+    key: string;
+    label: string;
+    width?: number;
+    minWidth?: number;
+  }>;
   records: Array<Record<string, any>>;
 }
 
@@ -252,14 +262,24 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
     description: "配置 AI 能力、任务类型、积分成本与调用状态",
     icon: "ri:brain-line",
     color: "#e17055",
-    endpoint: "GET /admin/v1/model-configs",
+    endpoint: "GET/POST /admin/v1/model-configs",
     apiResource: "models",
-    allowCreate: false,
     allowDelete: false,
     allowStatus: true,
-    searchable: ["name", "code", "type"],
+    createText: "新增模型",
+    searchable: ["modelName", "modelCode", "taskType"],
     fields: [
-      { key: "basePoints", label: "基础积分", type: "number" },
+      { key: "modelName", label: "模型名称", required: true, createOnly: true },
+      { key: "modelCode", label: "模型编码", required: true, createOnly: true },
+      {
+        key: "taskType",
+        label: "任务类型",
+        type: "select",
+        options: ["IMAGE", "VIDEO", "TEXT", "MODEL"],
+        required: true,
+        createOnly: true
+      },
+      { key: "basePoints", label: "基础积分", type: "number", required: true },
       { key: "countMin", label: "最小生成数量", type: "number" },
       { key: "countMax", label: "最大生成数量", type: "number" }
     ],
@@ -272,44 +292,7 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
       { key: "updatedAt", label: "更新时间" },
       { key: "status", label: "状态", width: 100 }
     ],
-    records: [
-      {
-        id: "M-01",
-        modelName: "通用图片生成",
-        modelCode: "IMAGE_GENERAL_V1",
-        taskType: "IMAGE",
-        basePoints: 20,
-        countMin: 1,
-        countMax: 4,
-        calls: 1842,
-        updatedAt: "2026-06-18 09:20",
-        status: status()
-      },
-      {
-        id: "M-02",
-        modelName: "通用视频生成",
-        modelCode: "VIDEO_GENERAL_V1",
-        taskType: "VIDEO",
-        basePoints: 100,
-        countMin: 1,
-        countMax: 1,
-        calls: 326,
-        updatedAt: "2026-06-17 18:05",
-        status: status()
-      },
-      {
-        id: "M-03",
-        modelName: "文案生成",
-        modelCode: "TEXT_COPY_V1",
-        taskType: "TEXT",
-        basePoints: 5,
-        countMin: 1,
-        countMax: 4,
-        calls: 2971,
-        updatedAt: "2026-06-16 11:42",
-        status: status()
-      }
-    ]
+    records: []
   },
   plans: {
     title: "套餐管理",
@@ -340,62 +323,64 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
       { key: "benefitSummary", label: "套餐权益" },
       { key: "status", label: "状态", width: 100 }
     ],
+    records: []
+  },
+  pointPackages: {
+    title: "积分套餐",
+    description: "维护前台星积分充值档位、积分数量与售价",
+    icon: "ri:coin-line",
+    color: "#6a5ae0",
+    endpoint: "GET/POST /admin/v1/recharge-packages",
+    apiResource: "pointPackages",
+    allowDelete: true,
+    allowStatus: true,
+    tableFullWidth: true,
+    createText: "新增积分套餐",
+    searchable: ["packageCode", "packageName"],
+    fields: [
+      {
+        key: "packageCode",
+        label: "套餐编码",
+        required: true,
+        createOnly: true
+      },
+      { key: "packageName", label: "套餐名称", required: true },
+      { key: "grantPoints", label: "基础积分", type: "number", required: true },
+      { key: "bonusPoints", label: "额外赠送积分", type: "number" },
+      { key: "priceYuan", label: "金额（元）", type: "number", required: true },
+      { key: "sortOrder", label: "排序", type: "number" }
+    ],
+    columns: [
+      { key: "packageCode", label: "套餐编码", minWidth: 120 },
+      { key: "packageName", label: "套餐名称", minWidth: 140 },
+      { key: "grantPoints", label: "基础积分", minWidth: 100 },
+      { key: "bonusPoints", label: "赠送积分", minWidth: 100 },
+      { key: "priceYuan", label: "金额", minWidth: 100 },
+      { key: "sortOrder", label: "排序", minWidth: 80 },
+      { key: "status", label: "状态", width: 100 }
+    ],
     records: [
       {
-        id: "P-01",
-        planName: "团队协作版",
-        planCode: "TEAM",
-        benefitsText: "12000积分/年\n3 人成员协作\n150G 存储空间",
-        priceCode: "TEAM_YEAR",
-        priceFen: 599900,
-        priceYuan: 5999,
-        cycleUnit: "YEAR",
-        cycleCount: 1,
-        cycleLabel: "1 年",
-        grantPoints: 12000,
-        status: status()
+        id: "1",
+        packageCode: "RC50",
+        packageName: "50元充值",
+        grantPoints: 500,
+        bonusPoints: 0,
+        priceFen: 5000,
+        priceYuan: 50,
+        sortOrder: 1,
+        status: "启用"
       },
       {
-        id: "P-02",
-        planName: "团队Plus版",
-        planCode: "TEAM_PLUS",
-        benefitsText: "30000积分/年\n5 人成员协作\n200G 存储空间",
-        priceCode: "TEAM_PLUS_YEAR",
-        priceFen: 899900,
-        priceYuan: 8999,
-        cycleUnit: "YEAR",
-        cycleCount: 1,
-        cycleLabel: "1 年",
-        grantPoints: 30000,
-        status: status()
-      },
-      {
-        id: "P-03",
-        planName: "团队Max版",
-        planCode: "TEAM_MAX",
-        benefitsText: "60000积分/年\n10 人成员协作\n300G 存储空间",
-        priceCode: "TEAM_MAX_YEAR",
-        priceFen: 1299900,
-        priceYuan: 12999,
-        cycleUnit: "YEAR",
-        cycleCount: 1,
-        cycleLabel: "1 年",
-        grantPoints: 60000,
-        status: status()
-      },
-      {
-        id: "P-04",
-        planName: "企业版",
-        planCode: "ENTERPRISE",
-        benefitsText: "120000积分/2年\n20 人成员协作\n500G 存储空间",
-        priceCode: "ENTERPRISE_TWO_YEARS",
-        priceFen: 2999900,
-        priceYuan: 29999,
-        cycleUnit: "YEAR",
-        cycleCount: 2,
-        cycleLabel: "2 年",
-        grantPoints: 120000,
-        status: status()
+        id: "2",
+        packageCode: "RC100",
+        packageName: "100元充值",
+        grantPoints: 1000,
+        bonusPoints: 0,
+        priceFen: 10000,
+        priceYuan: 100,
+        sortOrder: 2,
+        status: "启用"
       }
     ]
   },

@@ -74,6 +74,12 @@ export default [
         name: "PlanList",
         component: ResourcePage,
         meta: { title: "套餐列表", resource: "plans" } as any
+      },
+      {
+        path: "/plans/point-packages",
+        name: "PointPackageList",
+        component: ResourcePage,
+        meta: { title: "积分套餐", resource: "pointPackages" } as any
       }
     ]
   },

@@ -188,10 +188,46 @@ export const adminApi = {
       client.get(`/admin/v1/plans/${encodeURIComponent(planCode)}`)
     );
   },
-  models() {
-    return unwrap(client.get("/admin/v1/model-config")) as Promise<
+  pointPackages() {
+    return unwrap(client.get("/admin/v1/recharge-packages")) as Promise<
       { items?: any[] } | any[]
     >;
+  },
+  createPointPackage(data: Record<string, any>) {
+    return unwrap(client.post("/admin/v1/recharge-packages", data));
+  },
+  updatePointPackage(id: string, data: Record<string, any>) {
+    return unwrap(
+      client.put(`/admin/v1/recharge-packages/${encodeURIComponent(id)}`, data)
+    );
+  },
+  deletePointPackage(id: string) {
+    return unwrap(
+      client.delete(`/admin/v1/recharge-packages/${encodeURIComponent(id)}`)
+    );
+  },
+  pointPackageDetail(id: string) {
+    return unwrap(
+      client.get(`/admin/v1/recharge-packages/${encodeURIComponent(id)}`)
+    );
+  },
+  updatePointPackageStatus(id: string, status: string) {
+    return unwrap(
+      client.put(
+        `/admin/v1/recharge-packages/${encodeURIComponent(id)}/status`,
+        {
+          status
+        }
+      )
+    );
+  },
+  models() {
+    return unwrap(client.get("/admin/v1/model-configs")) as Promise<
+      { items?: any[] } | any[]
+    >;
+  },
+  createModel(data: Record<string, any>) {
+    return unwrap(client.post("/admin/v1/model-configs", data));
   },
   updateModel(modelCode: string, data: Record<string, any>) {
     return unwrap(

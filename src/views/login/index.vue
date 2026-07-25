@@ -14,7 +14,7 @@ const loading = ref(false);
 const sending = ref(false);
 const countdown = ref(0);
 const accepted = ref(true);
-const form = reactive({ phone: "18958012675", code: "123456" });
+const form = reactive({ phone: "", code: "" });
 const rules: FormRules = {
   phone: [
     { required: true, message: "请输入手机号", trigger: "blur" },

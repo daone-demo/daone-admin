@@ -86,6 +86,16 @@ const normalizeRemoteRows = (items: any[]) => {
       status: item.status === "ENABLED" ? "启用" : "停用"
     }));
   }
+  if (resourceKey.value === "pointPackages") {
+    return items.map(item => ({
+      ...item,
+      id: String(item.id),
+      grantPoints: Number(item.grantPoints || 0),
+      bonusPoints: Number(item.bonusPoints || 0),
+      priceYuan: Number(item.priceFen || 0) / 100,
+      status: normalizeStatus(item.status)
+    }));
+  }
   if (resourceKey.value === "workflows") {
     return items.map(item => ({
       ...item,
@@ -128,6 +138,8 @@ const loadRemote = async () => {
     if (config.value.apiResource === "orders")
       payload = await adminApi.orders({ page: 1, pageSize: 100 });
     if (config.value.apiResource === "plans") payload = await adminApi.plans();
+    if (config.value.apiResource === "pointPackages")
+      payload = await adminApi.pointPackages();
     if (config.value.apiResource === "models")
       payload = await adminApi.models();
     if (config.value.apiResource === "prompts")
@@ -168,6 +180,16 @@ const filteredRecords = computed(() => {
 const statuses = computed(() => [
   ...new Set(records.value.map(item => item.status).filter(Boolean))
 ]);
+
+const editorFields = computed(() => {
+  const fields = config.value?.fields || [];
+  if (editingId.value) {
+    return fields.filter(field => !field.createOnly);
+  }
+  return fields;
+});
+
+const isTableFullWidth = computed(() => Boolean(config.value?.tableFullWidth));
 
 const activeCount = computed(
   () =>
@@ -212,14 +234,40 @@ const toApiPayload = () => {
     };
   }
   if (resourceKey.value === "models") {
-    return {
+    const parameters =
+      form.countMin || form.countMax
+        ? {
+            count: {
+              min: Number(form.countMin || 1),
+              max: Number(form.countMax || 1)
+            }
+          }
+        : {};
+    const payload = {
       basePoints: Number(form.basePoints || 0),
-      parameters: {
-        count: {
-          min: Number(form.countMin || 1),
-          max: Number(form.countMax || 1)
-        }
-      }
+      parameters
+    };
+    if (!editingId.value) {
+      return {
+        attributes: {},
+        modelName: String(form.modelName || "").trim(),
+        modelCode: String(form.modelCode || "").trim(),
+        taskType: String(form.taskType || "IMAGE"),
+        status: "ENABLED",
+        ...payload
+      };
+    }
+    return payload;
+  }
+  if (resourceKey.value === "pointPackages") {
+    return {
+      packageCode: String(form.packageCode || "").trim(),
+      packageName: String(form.packageName || "").trim(),
+      grantPoints: Number(form.grantPoints || 0),
+      bonusPoints: Number(form.bonusPoints || 0),
+      priceFen: Math.round(Number(form.priceYuan || 0) * 100),
+      sortOrder: Number(form.sortOrder || 0),
+      ...(!editingId.value ? { status: "ENABLED" } : {})
     };
   }
   if (resourceKey.value === "workflows") {
@@ -275,7 +323,7 @@ const toApiPayload = () => {
 };
 
 const save = async () => {
-  const missing = config.value.fields.find(
+  const missing = editorFields.value.find(
     field => field.required && !String(form[field.key] ?? "").trim()
   );
   if (missing) {
@@ -296,8 +344,16 @@ const save = async () => {
           ? await adminApi.updatePlan(String(form.planCode), payload)
           : await adminApi.createPlan(payload);
       }
-      if (resourceKey.value === "models")
-        await adminApi.updateModel(String(current.value.modelCode), payload);
+      if (resourceKey.value === "pointPackages") {
+        editingId.value
+          ? await adminApi.updatePointPackage(String(editingId.value), payload)
+          : await adminApi.createPointPackage(payload);
+      }
+      if (resourceKey.value === "models") {
+        editingId.value
+          ? await adminApi.updateModel(String(current.value.modelCode), payload)
+          : await adminApi.createModel(payload);
+      }
       if (resourceKey.value === "prompts") {
         editingId.value
           ? await adminApi.updatePromptTemplate(String(form.code), payload)
@@ -359,6 +415,8 @@ const remove = async (row: Record<string, any>) => {
         await adminApi.deleteWorkflow(String(row.id));
       if (resourceKey.value === "categories")
         await adminApi.deleteCategory(String(row.categoryCode));
+      if (resourceKey.value === "pointPackages")
+        await adminApi.deletePointPackage(String(row.id));
       await loadRemote();
       ElMessage.success("删除成功");
       return;
@@ -393,6 +451,8 @@ const toggleStatus = async (row: Record<string, any>) => {
         );
       if (resourceKey.value === "workflows")
         await adminApi.updateWorkflowStatus(String(row.id), apiStatus);
+      if (resourceKey.value === "pointPackages")
+        await adminApi.updatePointPackageStatus(String(row.id), apiStatus);
     } catch (error: any) {
       ElMessage.error(error?.message || "状态更新失败");
       return;
@@ -560,14 +620,22 @@ const inputType = (field: ResourceField) =>
         :data="filteredRecords"
         row-key="id"
         class="resource-table"
+        :class="{ 'resource-table--full': isTableFullWidth }"
+        :style="isTableFullWidth ? { width: '100%' } : undefined"
       >
         <el-table-column
           v-for="column in config.columns"
           :key="column.key"
           :label="column.label"
           :prop="column.key"
-          :width="column.width"
-          :min-width="column.width ? undefined : 130"
+          :width="isTableFullWidth ? undefined : column.width"
+          :min-width="
+            isTableFullWidth
+              ? column.minWidth || 160
+              : column.width
+                ? undefined
+                : 130
+          "
         >
           <template #default="{ row }">
             <div
@@ -616,13 +684,23 @@ const inputType = (field: ResourceField) =>
             >
               ¥{{ Number(row[column.key] || 0).toLocaleString() }}
             </span>
-            <span v-else-if="column.key === 'points'">
+            <span
+              v-else-if="
+                ['points', 'grantPoints', 'bonusPoints'].includes(column.key)
+              "
+            >
               {{ Number(row[column.key] || 0).toLocaleString() }}
             </span>
             <span v-else>{{ row[column.key] }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" fixed="right" width="230">
+        <el-table-column
+          label="操作"
+          :fixed="isTableFullWidth ? false : 'right'"
+          :width="isTableFullWidth ? undefined : 230"
+          :min-width="isTableFullWidth ? 220 : undefined"
+          align="right"
+        >
           <template #default="{ row }">
             <el-button link type="primary" @click="openDetail(row)"
               >详情</el-button
@@ -700,7 +778,7 @@ const inputType = (field: ResourceField) =>
     >
       <el-form label-position="top">
         <el-form-item
-          v-for="field in config.fields"
+          v-for="field in editorFields"
           :key="field.key"
           :label="field.label"
           :required="field.required"
@@ -797,6 +875,7 @@ const inputType = (field: ResourceField) =>
 
 <style scoped lang="scss">
 .daone-page {
+  width: 100%;
   min-height: 100%;
   color: #1f2430;
 }
@@ -912,6 +991,7 @@ h1 {
 }
 
 .table-card {
+  width: 100%;
   padding: 18px;
   background: #fff;
   border: 1px solid #ebeaf2;
@@ -948,6 +1028,27 @@ h1 {
 
 .resource-table :deep(.el-table__row td) {
   height: 62px;
+}
+
+.resource-table--full {
+  width: 100%;
+
+  :deep(table) {
+    width: 100% !important;
+    table-layout: fixed;
+  }
+
+  :deep(.el-table__header),
+  :deep(.el-table__body),
+  :deep(.el-table__header-wrapper),
+  :deep(.el-table__body-wrapper) {
+    width: 100% !important;
+  }
+
+  :deep(.el-table__header th:last-child),
+  :deep(.el-table__body td:last-child) {
+    padding-right: 16px;
+  }
 }
 
 .primary-cell {
