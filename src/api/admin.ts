@@ -19,7 +19,7 @@ export interface AdminPage<T = Record<string, any>> {
 }
 
 const client = axios.create({
-  baseURL: "https://dev.meilian.pangguimi.com/daone_dev/api",
+  baseURL: "https://api.dev.daoneai.com/api",
   timeout: 12000,
   headers: { "Content-Type": "application/json" }
 });
