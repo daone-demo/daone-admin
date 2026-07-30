@@ -19,16 +19,21 @@ export const injectResponsiveStorage = (app: App, config: PlatformConfigs) => {
         overallStyle: config.OverallStyle ?? "light" // 整体风格（浅色：light、深色：dark、自动：system）
       },
       // 系统配置-界面显示
-      configure: Storage.getData("configure", nameSpace) ?? {
-        grey: config.Grey ?? false,
-        weak: config.Weak ?? false,
-        hideTabs: config.HideTabs ?? false,
-        hideFooter: config.HideFooter ?? true,
-        showLogo: config.ShowLogo ?? true,
-        showModel: config.ShowModel ?? "smart",
-        multiTagsCache: config.MultiTagsCache ?? false,
-        stretch: config.Stretch ?? false
-      }
+      configure: (() => {
+        const defaults = {
+          grey: config.Grey ?? false,
+          weak: config.Weak ?? false,
+          hideTabs: config.HideTabs ?? false,
+          hideFooter: config.HideFooter ?? true,
+          showLogo: config.ShowLogo ?? true,
+          showModel: config.ShowModel ?? "smart",
+          multiTagsCache: config.MultiTagsCache ?? false,
+          stretch: config.Stretch ?? false
+        };
+        const stored = Storage.getData("configure", nameSpace);
+        if (!stored) return defaults;
+        return { ...stored, hideTabs: config.HideTabs ?? false };
+      })()
     },
     config.MultiTagsCache
       ? {
