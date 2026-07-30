@@ -15,7 +15,6 @@ export interface ResourceConfig {
   description: string;
   icon: string;
   color: string;
-  endpoint?: string;
   apiResource?:
     | "workflows"
     | "users"
@@ -52,7 +51,6 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
     description: "维护创作工作流、封面与画布节点配置",
     icon: "ri:flow-chart",
     color: "#6c5ce7",
-    endpoint: "GET/POST /admin/v1/workflows",
     apiResource: "workflows",
     allowDelete: true,
     allowStatus: true,
@@ -127,7 +125,6 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
     description: "查看用户、会员套餐、积分与项目使用情况",
     icon: "ri:user-3-line",
     color: "#0984e3",
-    endpoint: "GET /admin/v1/users",
     apiResource: "users",
     allowCreate: false,
     allowDelete: false,
@@ -190,8 +187,8 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
     description: "审核开票申请并维护发票开具与寄送状态",
     icon: "ri:bill-line",
     color: "#00b894",
-    endpoint: "GET/POST /admin/v1/invoices",
     apiResource: "invoices",
+    allowCreate: false,
     allowDelete: false,
     allowStatus: true,
     createText: "新增开票申请",
@@ -262,7 +259,6 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
     description: "配置 AI 能力、任务类型、积分成本与调用状态",
     icon: "ri:brain-line",
     color: "#e17055",
-    endpoint: "GET/POST /admin/v1/model-configs",
     apiResource: "models",
     allowDelete: false,
     allowStatus: true,
@@ -299,27 +295,19 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
     description: "维护前台会员套餐、计费周期、价格与积分权益",
     icon: "ri:vip-crown-line",
     color: "#fdcb6e",
-    endpoint: "GET/POST /admin/v1/plans",
     apiResource: "plans",
     allowDelete: false,
     allowStatus: true,
     createText: "新增套餐",
     searchable: ["name", "code"],
     fields: [
-      { key: "planName", label: "套餐名称", required: true },
-      { key: "planCode", label: "套餐编码", required: true },
-      { key: "benefitsText", label: "套餐权益（每行一项）", type: "textarea" },
-      {
-        key: "pricesText",
-        label: "价格配置（JSON 数组）",
-        type: "textarea",
-        required: true
-      }
+      { key: "planName", label: "套餐名称" },
+      { key: "planCode", label: "套餐编码" },
+      { key: "benefitsText", label: "套餐权益（每行一项）", type: "textarea" }
     ],
     columns: [
       { key: "planName", label: "套餐" },
       { key: "planCode", label: "套餐编码" },
-      { key: "priceSummary", label: "价格配置" },
       { key: "benefitSummary", label: "套餐权益" },
       { key: "status", label: "状态", width: 100 }
     ],
@@ -330,7 +318,6 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
     description: "维护前台星积分充值档位、积分数量与售价",
     icon: "ri:coin-line",
     color: "#6a5ae0",
-    endpoint: "GET/POST /admin/v1/recharge-packages",
     apiResource: "pointPackages",
     allowDelete: true,
     allowStatus: true,
@@ -389,7 +376,6 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
     description: "运营前台灵感瀑布流内容、作者数据与排序",
     icon: "ri:lightbulb-flash-line",
     color: "#e84393",
-    endpoint: "GET/POST /admin/v1/inspirations",
     apiResource: "inspirations",
     allowDelete: false,
     createText: "发布灵感",
@@ -456,7 +442,6 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
     description: "管理灵感发现与模板内容的分类层级",
     icon: "ri:folder-3-line",
     color: "#00cec9",
-    endpoint: "GET/POST /admin/v1/categories",
     apiResource: "categories",
     createText: "新增分类",
     allowDelete: true,
@@ -525,7 +510,6 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
     description: "查看套餐订单、支付渠道、金额与交易状态",
     icon: "ri:bank-card-line",
     color: "#636e72",
-    endpoint: "GET /admin/v1/orders",
     apiResource: "orders",
     allowCreate: false,
     allowDelete: false,
@@ -548,9 +532,9 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
         productName: "团队协作版",
         amountFen: 599900,
         amountYuan: 5999,
-        payType: "WECHAT",
+        payType: "微信",
         createdAt: "2026-06-18 10:18",
-        status: "PAID"
+        status: "已支付"
       },
       {
         id: "DN20260617018",
@@ -559,9 +543,9 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
         productName: "团队Max版",
         amountFen: 1299900,
         amountYuan: 12999,
-        payType: "ALIPAY",
+        payType: "支付宝",
         createdAt: "2026-06-17 14:52",
-        status: "PAID"
+        status: "已支付"
       },
       {
         id: "DN20260617012",
@@ -570,9 +554,9 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
         productName: "团队Plus版",
         amountFen: 99900,
         amountYuan: 999,
-        payType: "WECHAT",
+        payType: "微信",
         createdAt: "2026-06-17 11:06",
-        status: "PENDING"
+        status: "待支付"
       }
     ]
   },
@@ -581,7 +565,6 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
     description: "维护 AI 场景使用的系统提示词模板",
     icon: "ri:quill-pen-line",
     color: "#8e44ad",
-    endpoint: "GET/POST /admin/v1/prompt-templates",
     apiResource: "prompts",
     allowDelete: false,
     createText: "新增提示词模板",

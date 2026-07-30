@@ -20,12 +20,32 @@ const current = ref<Record<string, any>>({});
 const form = reactive<Record<string, any>>({});
 const records = ref<Array<Record<string, any>>>([]);
 const loading = ref(false);
-const apiState = ref<"connected" | "demo" | "unavailable">("demo");
 const apiError = ref("");
 
 const hasAdminToken = () => Boolean(getToken()?.accessToken);
 const shouldUseApi = () =>
   Boolean(config.value?.apiResource) && hasAdminToken();
+
+const orderPayTypeLabels: Record<string, string> = {
+  WECHAT: "微信",
+  ALIPAY: "支付宝",
+  BALANCE: "余额"
+};
+
+const orderStatusLabels: Record<string, string> = {
+  PAID: "已支付",
+  PENDING: "待支付",
+  PAYING: "支付中",
+  CANCELLED: "已取消",
+  CANCELED: "已取消",
+  REFUNDED: "已退款"
+};
+
+const formatOrderPayType = (value: string) =>
+  orderPayTypeLabels[String(value || "").toUpperCase()] || value;
+
+const formatOrderStatus = (value: string) =>
+  orderStatusLabels[String(value || "").toUpperCase()] || value;
 
 const resetRecords = () => {
   records.value = config.value?.records.map(item => ({ ...item })) || [];
@@ -51,7 +71,9 @@ const normalizeRemoteRows = (items: any[]) => {
     return items.map(item => ({
       ...item,
       id: item.orderNo,
-      amountYuan: Number(item.amountFen || 0) / 100
+      amountYuan: Number(item.amountFen || 0) / 100,
+      payType: formatOrderPayType(item.payType),
+      status: formatOrderStatus(item.status)
     }));
   }
   if (resourceKey.value === "invoices") {
@@ -66,13 +88,6 @@ const normalizeRemoteRows = (items: any[]) => {
       ...plan,
       id: plan.id || plan.planCode,
       benefitsText: (plan.benefits || []).join("\n"),
-      pricesText: JSON.stringify(plan.prices || [], null, 2),
-      priceSummary: (plan.prices || [])
-        .map(
-          (price: any) =>
-            `${price.priceCode} · ¥${Number(price.priceFen || 0) / 100}/${price.cycleCount || 1}${price.cycleUnit || "MONTH"}`
-        )
-        .join("；"),
       benefitSummary: (plan.benefits || []).join("；"),
       status: plan.status === "ENABLED" ? "启用" : "停用"
     }));
@@ -123,7 +138,6 @@ const loadRemote = async () => {
   resetRecords();
   apiError.value = "";
   if (!shouldUseApi()) {
-    apiState.value = config.value?.apiResource ? "demo" : "unavailable";
     return;
   }
   loading.value = true;
@@ -149,9 +163,7 @@ const loadRemote = async () => {
     if (config.value.apiResource === "categories")
       payload = await adminApi.categories();
     records.value = normalizeRemoteRows(normalizeList(payload));
-    apiState.value = "connected";
   } catch (error: any) {
-    apiState.value = "demo";
     apiError.value = error?.message || "管理接口暂不可用";
     ElMessage.warning(`${apiError.value}，当前展示接口字段示例`);
   } finally {
@@ -210,27 +222,23 @@ const openEditor = (row?: Record<string, any>) => {
 
 const toApiPayload = () => {
   if (resourceKey.value === "plans") {
-    let prices: any[];
-    try {
-      prices = JSON.parse(String(form.pricesText || "[]"));
-      if (!Array.isArray(prices) || prices.length === 0) throw new Error();
-    } catch {
-      throw new Error("价格配置必须是至少包含一项的 JSON 数组");
-    }
-    return {
-      planCode: form.planCode,
-      planName: form.planName,
-      benefits: String(form.benefitsText || "")
-        .split("\n")
-        .filter(Boolean),
-      prices: prices.map(price => ({
+    const mapPlanPrices = (prices: any[]) =>
+      (prices || []).map(price => ({
         priceCode: String(price.priceCode || ""),
         cycleUnit: String(price.cycleUnit || "MONTH"),
         cycleCount: Number(price.cycleCount || 1),
         priceFen: Number(price.priceFen || 0),
         originalPriceFen: Number(price.originalPriceFen || 0),
         grantPoints: Number(price.grantPoints || 0)
-      }))
+      }));
+
+    return {
+      planCode: form.planCode,
+      planName: form.planName,
+      benefits: String(form.benefitsText || "")
+        .split("\n")
+        .filter(Boolean),
+      prices: mapPlanPrices(editingId.value ? current.value?.prices || [] : [])
     };
   }
   if (resourceKey.value === "models") {
@@ -493,30 +501,12 @@ const adjustPoints = async () => {
   ElMessage.success("积分调整成功，流水已记录");
 };
 
-const handleInvoice = async (row: Record<string, any>) => {
-  const next =
-    row.status === "ISSUED" || row.status === "已开票" ? "PENDING" : "ISSUED";
-  if (config.value.apiResource && shouldUseApi()) {
-    try {
-      await adminApi.updateInvoiceStatus(String(row.id), { status: next });
-      await loadRemote();
-      ElMessage.success(next === "ISSUED" ? "已完成开票" : "已退回待处理");
-      return;
-    } catch (error: any) {
-      ElMessage.error(error?.message || "开票状态更新失败");
-      return;
-    }
-  }
-  row.status = next;
-  ElMessage.success(next === "ISSUED" ? "已完成开票" : "已退回待处理");
-};
-
 const statusType = (value: string) => {
   if (["启用", "已支付", "已开票", "PAID", "ENABLED", "ISSUED"].includes(value))
     return "success";
   if (["待支付", "待开票", "PENDING", "PAYING", "PROCESSING"].includes(value))
     return "warning";
-  if (["停用", "已取消", "REJECTED", "CANCELED"].includes(value))
+  if (["停用", "已取消", "REJECTED", "CANCELED", "CANCELLED"].includes(value))
     return "danger";
   return "primary";
 };
@@ -539,20 +529,6 @@ const inputType = (field: ResourceField) =>
         <div class="eyebrow">DAONE OPERATIONS</div>
         <h1>{{ config.title }}</h1>
         <p>{{ config.description }}</p>
-        <div class="endpoint-line">
-          <el-tag size="small" effect="plain">{{ config.endpoint }}</el-tag>
-          <span v-if="apiState === 'connected'" class="api-state online"
-            >实时接口</span
-          >
-          <span
-            v-else-if="apiState === 'demo'"
-            class="api-state"
-            :title="apiError"
-          >
-            {{ apiError ? "接口异常 · 示例数据" : "接口字段演示" }}
-          </span>
-          <span v-else class="api-state pending">接口待建设</span>
-        </div>
       </div>
       <el-button
         v-if="config.fields.length && config.allowCreate !== false"
@@ -713,19 +689,9 @@ const inputType = (field: ResourceField) =>
             >
               调整积分
             </el-button>
-            <template v-else-if="resourceKey === 'invoices'">
-              <el-button link type="primary" @click="openEditor(row)"
-                >编辑</el-button
-              >
-              <el-button link type="primary" @click="handleInvoice(row)">
-                {{
-                  row.status === "ISSUED" || row.status === "已开票"
-                    ? "退回待处理"
-                    : "完成开票"
-                }}
-              </el-button>
-            </template>
-            <template v-else-if="resourceKey !== 'orders'">
+            <template
+              v-else-if="resourceKey !== 'orders' && resourceKey !== 'invoices'"
+            >
               <el-button link type="primary" @click="openEditor(row)"
                 >编辑</el-button
               >
@@ -934,26 +900,6 @@ h1 {
 .hero-copy p {
   margin: 7px 0 0;
   color: #7a7d8b;
-}
-
-.endpoint-line {
-  display: flex;
-  gap: 9px;
-  align-items: center;
-  margin-top: 10px;
-}
-
-.api-state {
-  font-size: 11px;
-  color: #8d8f99;
-}
-
-.api-state.online {
-  color: #00a878;
-}
-
-.api-state.pending {
-  color: #e17055;
 }
 
 .create-button {

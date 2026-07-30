@@ -81,7 +81,7 @@ const bars = computed(() =>
       <div>
         <span class="eyebrow">DAONE OPERATIONS CENTER</span>
         <h1>下午好，运营管理员</h1>
-        <p>今天有 18 个待处理事项，整体业务运行稳定。</p>
+        <p>整体业务运行稳定，以下是今日运营概览。</p>
       </div>
       <div class="welcome-orb">
         <IconifyIconOnline icon="ri:sparkling-2-fill" />
@@ -130,51 +130,6 @@ const bars = computed(() =>
         </div>
         <div class="legend">
           <i class="purple" /> 新增用户 <i class="blue" /> 订单量
-        </div>
-      </article>
-
-      <article class="panel todo-panel">
-        <div class="panel-head">
-          <div>
-            <h2>待办事项</h2>
-            <p>需要你关注的运营任务</p>
-          </div>
-          <el-tag round type="danger">18</el-tag>
-        </div>
-        <div class="todo-list">
-          <div class="todo-item">
-            <div class="todo-icon orange">
-              <IconifyIconOnline icon="ri:bill-line" />
-            </div>
-            <div><b>待处理开票申请</b><span>6 笔申请等待审核</span></div>
-            <el-button
-              link
-              type="primary"
-              @click="router.push('/invoices/list')"
-              >处理</el-button
-            >
-          </div>
-          <div class="todo-item">
-            <div class="todo-icon purple">
-              <IconifyIconOnline icon="ri:flow-chart" />
-            </div>
-            <div><b>工作流待发布</b><span>4 个草稿等待上线</span></div>
-            <el-button
-              link
-              type="primary"
-              @click="router.push('/workflows/list')"
-              >查看</el-button
-            >
-          </div>
-          <div class="todo-item">
-            <div class="todo-icon blue">
-              <IconifyIconOnline icon="ri:customer-service-2-line" />
-            </div>
-            <div><b>用户异常反馈</b><span>8 条反馈需要跟进</span></div>
-            <el-button link type="primary" @click="router.push('/users/list')"
-              >查看</el-button
-            >
-          </div>
         </div>
       </article>
     </section>
@@ -305,7 +260,7 @@ const bars = computed(() =>
 
 .main-grid {
   display: grid;
-  grid-template-columns: 1.65fr 1fr;
+  grid-template-columns: 1fr;
   gap: 16px;
   margin-bottom: 16px;
 }
@@ -413,60 +368,6 @@ const bars = computed(() =>
 
 .legend .blue {
   background: #52aef5;
-}
-
-.todo-list {
-  margin-top: 12px;
-}
-
-.todo-item {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  padding: 17px 0;
-  border-bottom: 1px solid #f0eef4;
-}
-
-.todo-item:last-child {
-  border: 0;
-}
-
-.todo-item div:nth-child(2) {
-  flex: 1;
-}
-
-.todo-item b,
-.todo-item span {
-  display: block;
-}
-
-.todo-item span {
-  margin-top: 4px;
-  font-size: 12px;
-  color: #999ba5;
-}
-
-.todo-icon {
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-}
-
-.todo-icon.orange {
-  color: #e17055;
-  background: #fff0eb;
-}
-
-.todo-icon.purple {
-  color: #6c5ce7;
-  background: #f0edff;
-}
-
-.todo-icon.blue {
-  color: #0984e3;
-  background: #eaf6ff;
 }
 
 .shortcut-grid {
