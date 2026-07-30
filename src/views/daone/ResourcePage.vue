@@ -21,6 +21,9 @@ const form = reactive<Record<string, any>>({});
 const records = ref<Array<Record<string, any>>>([]);
 const loading = ref(false);
 const apiError = ref("");
+const currentPage = ref(1);
+const pageSize = ref(10);
+const PAGE_SIZES = [10, 20, 50, 100];
 
 const hasAdminToken = () => Boolean(getToken()?.accessToken);
 const shouldUseApi = () =>
@@ -51,10 +54,31 @@ const resetRecords = () => {
   records.value = config.value?.records.map(item => ({ ...item })) || [];
   keyword.value = "";
   statusFilter.value = "";
+  currentPage.value = 1;
 };
 
 const normalizeList = (payload: any) =>
   Array.isArray(payload) ? payload : payload?.items || payload?.records || [];
+
+const fetchPaginatedResource = async (
+  fetcher: (params: { page: number; pageSize: number }) => Promise<any>
+) => {
+  const batchSize = 100;
+  let page = 1;
+  const all: any[] = [];
+
+  while (true) {
+    const payload = await fetcher({ page, pageSize: batchSize });
+    const items = normalizeList(payload);
+    all.push(...items);
+    const total = Number(payload?.total ?? all.length);
+    if (!items.length || items.length < batchSize || all.length >= total) break;
+    page += 1;
+    if (page > 100) break;
+  }
+
+  return all;
+};
 
 const normalizeRemoteRows = (items: any[]) => {
   const normalizeStatus = (value: string) =>
@@ -142,27 +166,32 @@ const loadRemote = async () => {
   }
   loading.value = true;
   try {
-    let payload: any;
-    if (config.value.apiResource === "workflows")
-      payload = await adminApi.workflows({ page: 1, pageSize: 100 });
-    if (config.value.apiResource === "users")
-      payload = await adminApi.users({ page: 1, pageSize: 100 });
-    if (config.value.apiResource === "invoices")
-      payload = await adminApi.invoices({ page: 1, pageSize: 100 });
-    if (config.value.apiResource === "orders")
-      payload = await adminApi.orders({ page: 1, pageSize: 100 });
-    if (config.value.apiResource === "plans") payload = await adminApi.plans();
-    if (config.value.apiResource === "pointPackages")
-      payload = await adminApi.pointPackages();
-    if (config.value.apiResource === "models")
-      payload = await adminApi.models();
-    if (config.value.apiResource === "prompts")
-      payload = await adminApi.promptTemplates();
-    if (config.value.apiResource === "inspirations")
-      payload = await adminApi.inspirations();
-    if (config.value.apiResource === "categories")
-      payload = await adminApi.categories();
-    records.value = normalizeRemoteRows(normalizeList(payload));
+    let items: any[] = [];
+    const apiResource = config.value.apiResource;
+    if (apiResource === "workflows") {
+      items = await fetchPaginatedResource(params =>
+        adminApi.workflows(params)
+      );
+    } else if (apiResource === "users") {
+      items = await fetchPaginatedResource(params => adminApi.users(params));
+    } else if (apiResource === "invoices") {
+      items = await fetchPaginatedResource(params => adminApi.invoices(params));
+    } else if (apiResource === "orders") {
+      items = await fetchPaginatedResource(params => adminApi.orders(params));
+    } else if (apiResource === "plans") {
+      items = normalizeList(await adminApi.plans());
+    } else if (apiResource === "pointPackages") {
+      items = normalizeList(await adminApi.pointPackages());
+    } else if (apiResource === "models") {
+      items = normalizeList(await adminApi.models());
+    } else if (apiResource === "prompts") {
+      items = normalizeList(await adminApi.promptTemplates());
+    } else if (apiResource === "inspirations") {
+      items = normalizeList(await adminApi.inspirations());
+    } else if (apiResource === "categories") {
+      items = normalizeList(await adminApi.categories());
+    }
+    records.value = normalizeRemoteRows(items);
   } catch (error: any) {
     apiError.value = error?.message || "管理接口暂不可用";
     ElMessage.warning(`${apiError.value}，当前展示接口字段示例`);
@@ -187,6 +216,15 @@ const filteredRecords = computed(() => {
       matchesWord && (!statusFilter.value || item.status === statusFilter.value)
     );
   });
+});
+
+const paginatedRecords = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value;
+  return filteredRecords.value.slice(start, start + pageSize.value);
+});
+
+watch([keyword, statusFilter], () => {
+  currentPage.value = 1;
 });
 
 const statuses = computed(() => [
@@ -593,7 +631,7 @@ const inputType = (field: ResourceField) =>
 
       <el-table
         v-loading="loading"
-        :data="filteredRecords"
+        :data="paginatedRecords"
         row-key="id"
         class="resource-table"
         :class="{ 'resource-table--full': isTableFullWidth }"
@@ -731,6 +769,17 @@ const inputType = (field: ResourceField) =>
           <el-empty description="暂无匹配数据" />
         </template>
       </el-table>
+
+      <div class="table-pagination">
+        <el-pagination
+          v-model:current-page="currentPage"
+          v-model:page-size="pageSize"
+          :page-sizes="PAGE_SIZES"
+          :total="filteredRecords.length"
+          background
+          layout="total, sizes, prev, pager, next, jumper"
+        />
+      </div>
     </section>
 
     <el-dialog
@@ -974,6 +1023,12 @@ h1 {
 
 .resource-table :deep(.el-table__row td) {
   height: 62px;
+}
+
+.table-pagination {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 16px;
 }
 
 .resource-table--full {
