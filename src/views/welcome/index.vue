@@ -1,43 +1,59 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
+import { ElMessage } from "element-plus";
+import {
+  adminApi,
+  type DashboardQuickEntry,
+  type DashboardResponse,
+  type DashboardTrendPoint
+} from "@/api/admin";
+import { useUserStoreHook } from "@/store/modules/user";
 
 defineOptions({ name: "Welcome" });
 
 const router = useRouter();
+const userStore = useUserStoreHook();
 const period = ref("近 7 天");
-const metrics = [
-  {
-    label: "累计用户",
-    value: "12,680",
-    change: "+12.5%",
-    icon: "ri:user-3-line",
-    color: "#6c5ce7"
-  },
-  {
-    label: "今日订单",
-    value: "286",
-    change: "+8.2%",
-    icon: "ri:shopping-bag-3-line",
-    color: "#0984e3"
-  },
-  {
-    label: "今日流水",
-    value: "¥86,420",
-    change: "+18.7%",
-    icon: "ri:money-cny-circle-line",
-    color: "#00b894"
-  },
-  {
-    label: "AI 调用量",
-    value: "5,139",
-    change: "+6.4%",
-    icon: "ri:sparkling-2-line",
-    color: "#e17055"
-  }
-];
+const loading = ref(false);
+const dashboardData = ref<DashboardResponse | null>(null);
 
-const shortcuts = [
+const metricMeta = [
+  {
+    key: "totalUsers",
+    label: "累计用户",
+    icon: "ri:user-3-line",
+    color: "#6c5ce7",
+    format: (value: number) => value.toLocaleString("zh-CN")
+  },
+  {
+    key: "todayOrders",
+    label: "今日订单",
+    icon: "ri:shopping-bag-3-line",
+    color: "#0984e3",
+    format: (value: number) => value.toLocaleString("zh-CN")
+  },
+  {
+    key: "todayRevenue",
+    label: "今日流水",
+    icon: "ri:money-cny-circle-line",
+    color: "#00b894",
+    format: (value: number) =>
+      `¥${(value / 100).toLocaleString("zh-CN", {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2
+      })}`
+  },
+  {
+    key: "todayAiCalls",
+    label: "AI 调用量",
+    icon: "ri:sparkling-2-line",
+    color: "#e17055",
+    format: (value: number) => value.toLocaleString("zh-CN")
+  }
+] as const;
+
+const defaultShortcuts: DashboardQuickEntry[] = [
   {
     title: "用户管理",
     subtitle: "查看用户与积分",
@@ -68,19 +84,187 @@ const shortcuts = [
   }
 ];
 
-const bars = computed(() =>
-  period.value === "近 7 天"
-    ? [42, 58, 49, 71, 65, 86, 78]
-    : [32, 45, 38, 56, 48, 62, 70]
+const isMetricItem = (value: unknown): value is { value?: number } =>
+  typeof value === "object" && value !== null && "value" in value;
+
+const pickMetricValue = (
+  overview: DashboardResponse["overview"],
+  key: (typeof metricMeta)[number]["key"],
+  fallback = 0
+) => {
+  const overviewValue = overview?.[key];
+  if (isMetricItem(overviewValue)) {
+    return Number(overviewValue.value ?? fallback);
+  }
+  if (overviewValue !== undefined && overviewValue !== null) {
+    return Number(overviewValue);
+  }
+
+  if (key === "totalUsers") {
+    return Number(dashboardData.value?.totalUsers ?? fallback);
+  }
+
+  if (key === "todayAiCalls") {
+    const calls = overview?.todayCalls;
+    if (isMetricItem(calls)) return Number(calls.value ?? fallback);
+    return Number(calls ?? fallback);
+  }
+
+  return fallback;
+};
+
+const pickMetricChange = (
+  overview: DashboardResponse["overview"],
+  key: (typeof metricMeta)[number]["key"]
+) => {
+  const overviewValue = overview?.[key];
+  if (isMetricItem(overviewValue)) {
+    return Number(
+      overviewValue.change ??
+        overviewValue.growth ??
+        overviewValue.dayOnDay ??
+        0
+    );
+  }
+
+  const changeKeyMap: Record<string, string[]> = {
+    totalUsers: ["totalUsersChange", "totalUsersGrowth", "totalUsersDayOnDay"],
+    todayOrders: [
+      "todayOrdersChange",
+      "todayOrdersGrowth",
+      "todayOrdersDayOnDay"
+    ],
+    todayRevenue: [
+      "todayRevenueChange",
+      "todayRevenueGrowth",
+      "todayRevenueDayOnDay"
+    ],
+    todayAiCalls: [
+      "todayAiCallsChange",
+      "todayAiCallsGrowth",
+      "todayCallsChange",
+      "todayCallsGrowth"
+    ]
+  };
+
+  for (const changeKey of changeKeyMap[key] || []) {
+    const change = overview?.[changeKey];
+    if (change !== undefined && change !== null) {
+      return Number(change);
+    }
+  }
+
+  return 0;
+};
+
+const formatChange = (change: number) => {
+  const prefix = change > 0 ? "+" : "";
+  return `${prefix}${change.toFixed(1)}%`;
+};
+
+const metrics = computed(() => {
+  const overview = dashboardData.value?.overview;
+  return metricMeta.map(item => {
+    const rawValue = pickMetricValue(overview, item.key);
+    const change = pickMetricChange(overview, item.key);
+    return {
+      ...item,
+      value: item.format(rawValue),
+      change: formatChange(change),
+      changePositive: change >= 0
+    };
+  });
+});
+
+const greeting = computed(() => {
+  const hour = new Date().getHours();
+  if (hour < 12) return "早上好";
+  if (hour < 18) return "下午好";
+  return "晚上好";
+});
+
+const displayName = computed(
+  () => userStore.nickname || userStore.username || "运营管理员"
 );
+
+const normalizeQuickEntries = (
+  quickEntries: DashboardResponse["quickEntries"]
+) => {
+  if (!quickEntries) return defaultShortcuts;
+  if (Array.isArray(quickEntries)) {
+    return quickEntries.length ? quickEntries : defaultShortcuts;
+  }
+  const items = Object.values(quickEntries).filter(item => item?.title);
+  return items.length ? items : defaultShortcuts;
+};
+
+const shortcuts = computed(() =>
+  normalizeQuickEntries(dashboardData.value?.quickEntries)
+);
+
+const formatTrendLabel = (point: DashboardTrendPoint) => {
+  const [year, month, day] = point.date.split("-").map(Number);
+  if (year && month && day) {
+    return `${month}/${day}`;
+  }
+  return point.date;
+};
+
+const trendBars = computed(() => {
+  const trends = dashboardData.value?.trends;
+  if (!Array.isArray(trends) || !trends.length) {
+    return [];
+  }
+
+  const days = period.value === "近 7 天" ? 7 : 30;
+  const points = trends.slice(-days);
+
+  const normalized = points.map(point => {
+    const newUsers = Number(point.newUsers ?? 0);
+    const orders = Number(point.orders ?? 0);
+    return {
+      label: formatTrendLabel(point),
+      newUsers,
+      orders
+    };
+  });
+
+  const maxValue = Math.max(
+    ...normalized.flatMap(item => [item.newUsers, item.orders]),
+    1
+  );
+
+  return normalized.map(item => ({
+    label: item.label,
+    newUsers: item.newUsers,
+    orders: item.orders,
+    newUsersHeight: Math.max((item.newUsers / maxValue) * 100, 8),
+    ordersHeight: Math.max((item.orders / maxValue) * 100, 8)
+  }));
+});
+
+const fetchDashboard = async () => {
+  loading.value = true;
+  try {
+    dashboardData.value = await adminApi.dashboard();
+  } catch (error: any) {
+    ElMessage.warning(error?.message || "首页数据加载失败");
+  } finally {
+    loading.value = false;
+  }
+};
+
+onMounted(() => {
+  fetchDashboard();
+});
 </script>
 
 <template>
-  <div class="dashboard">
+  <div v-loading="loading" class="dashboard">
     <section class="welcome-card">
       <div>
         <span class="eyebrow">DAONE OPERATIONS CENTER</span>
-        <h1>下午好，运营管理员</h1>
+        <h1>{{ greeting }}，{{ displayName }}</h1>
         <p>整体业务运行稳定，以下是今日运营概览。</p>
       </div>
       <div class="welcome-orb">
@@ -99,9 +283,10 @@ const bars = computed(() =>
         <div>
           <span>{{ item.label }}</span>
           <strong>{{ item.value }}</strong>
-          <small
-            ><b>{{ item.change }}</b> 较昨日</small
-          >
+          <small>
+            <b :class="{ negative: !item.changePositive }">{{ item.change }}</b>
+            较昨日
+          </small>
         </div>
       </article>
     </section>
@@ -115,19 +300,41 @@ const bars = computed(() =>
           </div>
           <el-segmented v-model="period" :options="['近 7 天', '近 30 天']" />
         </div>
-        <div class="chart">
+        <div v-if="trendBars.length" class="chart">
           <div class="chart-grid" />
-          <div v-for="(height, index) in bars" :key="index" class="bar-group">
-            <div
-              class="bar secondary"
-              :style="{ height: height * 0.72 + '%' }"
-            />
-            <div class="bar primary" :style="{ height: height + '%' }" />
-            <span>{{
-              ["周一", "周二", "周三", "周四", "周五", "周六", "周日"][index]
-            }}</span>
+          <div
+            v-for="(item, index) in trendBars"
+            :key="`${item.label}-${index}`"
+            class="bar-group"
+          >
+            <el-tooltip
+              :content="`${item.label} 订单量：${item.orders}`"
+              placement="top"
+              :show-after="80"
+            >
+              <div class="bar-wrap">
+                <div
+                  class="bar secondary"
+                  :style="{ height: item.ordersHeight * 0.72 + '%' }"
+                />
+              </div>
+            </el-tooltip>
+            <el-tooltip
+              :content="`${item.label} 新增用户：${item.newUsers}`"
+              placement="top"
+              :show-after="80"
+            >
+              <div class="bar-wrap">
+                <div
+                  class="bar primary"
+                  :style="{ height: item.newUsersHeight + '%' }"
+                />
+              </div>
+            </el-tooltip>
+            <span>{{ item.label }}</span>
           </div>
         </div>
+        <div v-else class="chart-empty">暂无趋势数据</div>
         <div class="legend">
           <i class="purple" /> 新增用户 <i class="blue" /> 订单量
         </div>
@@ -145,10 +352,15 @@ const bars = computed(() =>
         <button
           v-for="item in shortcuts"
           :key="item.title"
-          @click="router.push(item.path)"
+          @click="item.path && router.push(item.path)"
         >
-          <span :style="{ color: item.color, background: item.color + '14' }">
-            <IconifyIconOnline :icon="item.icon" />
+          <span
+            :style="{
+              color: item.color || '#6c5ce7',
+              background: (item.color || '#6c5ce7') + '14'
+            }"
+          >
+            <IconifyIconOnline :icon="item.icon || 'ri:arrow-right-line'" />
           </span>
           <b>{{ item.title }}</b>
           <small>{{ item.subtitle }}</small>
@@ -258,6 +470,10 @@ const bars = computed(() =>
   color: #00a878;
 }
 
+.metric-card small b.negative {
+  color: #e17055;
+}
+
 .main-grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -302,6 +518,14 @@ const bars = computed(() =>
   padding: 28px 20px;
 }
 
+.chart-empty {
+  display: grid;
+  place-items: center;
+  height: 238px;
+  font-size: 13px;
+  color: #a0a2aa;
+}
+
 .chart-grid {
   position: absolute;
   inset: 28px 0;
@@ -322,10 +546,31 @@ const bars = computed(() =>
   height: 100%;
 }
 
+.bar-group :deep(.el-tooltip__trigger) {
+  display: flex;
+  flex: 1;
+  align-items: flex-end;
+  height: 100%;
+}
+
+.bar-wrap {
+  display: flex;
+  flex: 1;
+  align-items: flex-end;
+  width: 100%;
+  height: 100%;
+}
+
 .bar {
-  width: 50%;
+  width: 100%;
   min-height: 10px;
+  cursor: pointer;
   border-radius: 6px 6px 2px 2px;
+  transition: opacity 0.15s ease;
+}
+
+.bar:hover {
+  opacity: 0.85;
 }
 
 .bar.primary {

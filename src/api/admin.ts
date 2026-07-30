@@ -18,6 +18,48 @@ export interface AdminPage<T = Record<string, any>> {
   pages?: number;
 }
 
+export interface DashboardMetricItem {
+  value?: number;
+  change?: number;
+  growth?: number;
+  dayOnDay?: number;
+}
+
+export interface DashboardOverview {
+  totalUsers?: number | DashboardMetricItem;
+  todayOrders?: number | DashboardMetricItem;
+  todayRevenue?: number | DashboardMetricItem;
+  todayAiCalls?: number | DashboardMetricItem;
+  todayCalls?: number | DashboardMetricItem;
+  [key: string]: unknown;
+}
+
+export interface DashboardTrendPoint {
+  date: string;
+  newUsers: number;
+  orders: number;
+}
+
+export interface DashboardQuickEntry {
+  title: string;
+  subtitle?: string;
+  icon?: string;
+  path?: string;
+  color?: string;
+}
+
+export interface DashboardResponse {
+  overview?: DashboardOverview;
+  quickEntries?: DashboardQuickEntry[] | Record<string, DashboardQuickEntry>;
+  recentActivity?: Record<string, unknown>;
+  todos?: Record<string, unknown>;
+  totalOrders?: number;
+  totalPoints?: number;
+  totalRevenue?: number;
+  totalUsers?: number;
+  trends?: DashboardTrendPoint[];
+}
+
 const client = axios.create({
   baseURL: "https://api.dev.daoneai.com/api",
   timeout: 12000,
@@ -28,6 +70,9 @@ client.interceptors.request.use(config => {
   const token = getToken()?.accessToken;
   if (token && !config.headers.Authorization) {
     config.headers.Authorization = `Bearer ${token}`;
+  }
+  if (config.data instanceof FormData) {
+    delete config.headers["Content-Type"];
   }
   return config;
 });
@@ -120,7 +165,9 @@ export const adminApi = {
     ) as Promise<AdminPage>;
   },
   dashboard() {
-    return unwrap(client.get("/admin/v1/dashboard"));
+    return unwrap(
+      client.get("/admin/v1/dashboard")
+    ) as Promise<DashboardResponse>;
   },
   updateUserStatus(userId: string, status: string) {
     return unwrap(
@@ -396,5 +443,30 @@ export const adminApi = {
         data
       )
     );
+  },
+  uploadFile(file: File) {
+    const formData = new FormData();
+    formData.append("file", file);
+    return unwrap(
+      client.post("/admin/v1/files/upload", formData, { timeout: 120000 })
+    ) as Promise<{
+      fileName: string;
+      url: string;
+    }>;
+  },
+  uploadAsset(data: {
+    fileName: string;
+    contentType: string;
+    fileSize: number;
+    fileBase64: string;
+    projectId?: string;
+  }) {
+    return unwrap(
+      client.post("/assets/upload-tickets", data, { timeout: 120000 })
+    ) as Promise<{
+      id: string;
+      previewUrl: string;
+      url?: string;
+    }>;
   }
 };

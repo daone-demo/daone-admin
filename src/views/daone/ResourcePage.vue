@@ -555,6 +555,61 @@ const inputType = (field: ResourceField) =>
     : field.type === "number"
       ? "number"
       : "text";
+
+const uploadFieldLoading = ref<Record<string, boolean>>({});
+
+const fileToBase64 = (file: File) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result || "");
+      const base64 = result.split(",")[1];
+      if (!base64) {
+        reject(new Error("文件读取失败"));
+        return;
+      }
+      resolve(base64);
+    };
+    reader.onerror = () => reject(reader.error ?? new Error("文件读取失败"));
+    reader.readAsDataURL(file);
+  });
+
+const isVideoCoverUrl = (url: string) =>
+  /\.(mp4|webm|ogg|mov|m4v)(\?|$)/i.test(url);
+
+const isUploadFieldLoading = (key: string) =>
+  Boolean(uploadFieldLoading.value[key]);
+
+const uploadFieldFile = async (field: ResourceField, file: File) => {
+  const isImage = file.type.startsWith("image/");
+  const isVideo = file.type.startsWith("video/");
+  if (!isImage && !isVideo) {
+    ElMessage.warning("请上传图片或视频文件");
+    return;
+  }
+
+  uploadFieldLoading.value[field.key] = true;
+  try {
+    if (resourceKey.value === "inspirations") {
+      const result = await adminApi.uploadFile(file);
+      form[field.key] = result.url || "";
+    } else {
+      const fileBase64 = await fileToBase64(file);
+      const asset = await adminApi.uploadAsset({
+        fileName: file.name,
+        contentType: file.type || "application/octet-stream",
+        fileSize: file.size,
+        fileBase64
+      });
+      form[field.key] = asset.previewUrl || asset.url || "";
+    }
+    ElMessage.success("上传成功");
+  } catch (error: any) {
+    ElMessage.error(error?.message || "上传失败");
+  } finally {
+    uploadFieldLoading.value[field.key] = false;
+  }
+};
 </script>
 
 <template>
@@ -710,59 +765,64 @@ const inputType = (field: ResourceField) =>
         </el-table-column>
         <el-table-column
           label="操作"
+          class-name="action-column"
           :fixed="isTableFullWidth ? false : 'right'"
           :width="isTableFullWidth ? undefined : 230"
           :min-width="isTableFullWidth ? 220 : undefined"
           align="right"
         >
           <template #default="{ row }">
-            <el-button link type="primary" @click="openDetail(row)"
-              >详情</el-button
-            >
-            <el-button
-              v-if="resourceKey === 'users'"
-              link
-              type="primary"
-              @click="openPoints(row)"
-            >
-              调整积分
-            </el-button>
-            <template
-              v-else-if="resourceKey !== 'orders' && resourceKey !== 'invoices'"
-            >
-              <el-button link type="primary" @click="openEditor(row)"
-                >编辑</el-button
+            <div class="table-actions">
+              <el-button link type="primary" @click="openDetail(row)"
+                >详情</el-button
               >
-              <el-dropdown
-                v-if="
-                  config.allowStatus &&
-                  (row.status === '启用' || row.status === '停用')
-                "
-                trigger="click"
-              >
-                <el-button link type="primary">更多</el-button>
-                <template #dropdown>
-                  <el-dropdown-menu>
-                    <el-dropdown-item @click="toggleStatus(row)">
-                      {{ row.status === "启用" ? "停用" : "启用" }}
-                    </el-dropdown-item>
-                    <el-dropdown-item
-                      v-if="config.allowDelete !== false"
-                      divided
-                      @click="remove(row)"
-                      >删除</el-dropdown-item
-                    >
-                  </el-dropdown-menu>
-                </template>
-              </el-dropdown>
               <el-button
-                v-else-if="config.allowDelete !== false"
+                v-if="resourceKey === 'users'"
                 link
-                type="danger"
-                @click="remove(row)"
-                >删除</el-button
+                type="primary"
+                @click="openPoints(row)"
               >
-            </template>
+                调整积分
+              </el-button>
+              <template
+                v-else-if="
+                  resourceKey !== 'orders' && resourceKey !== 'invoices'
+                "
+              >
+                <el-button link type="primary" @click="openEditor(row)"
+                  >编辑</el-button
+                >
+                <el-dropdown
+                  v-if="
+                    config.allowStatus &&
+                    (row.status === '启用' || row.status === '停用')
+                  "
+                  trigger="click"
+                >
+                  <el-button link type="primary">更多</el-button>
+                  <template #dropdown>
+                    <el-dropdown-menu>
+                      <el-dropdown-item @click="toggleStatus(row)">
+                        {{ row.status === "启用" ? "停用" : "启用" }}
+                      </el-dropdown-item>
+                      <el-dropdown-item
+                        v-if="config.allowDelete !== false"
+                        divided
+                        @click="remove(row)"
+                        >删除</el-dropdown-item
+                      >
+                    </el-dropdown-menu>
+                  </template>
+                </el-dropdown>
+                <el-button
+                  v-else-if="config.allowDelete !== false"
+                  link
+                  type="danger"
+                  @click="remove(row)"
+                  >删除</el-button
+                >
+              </template>
+            </div>
           </template>
         </el-table-column>
         <template #empty>
@@ -811,6 +871,46 @@ const inputType = (field: ResourceField) =>
               :value="option"
             />
           </el-select>
+          <div v-else-if="field.type === 'upload'" class="media-upload">
+            <el-upload
+              class="media-uploader"
+              :show-file-list="false"
+              :accept="field.accept || 'image/*,video/*'"
+              :disabled="isUploadFieldLoading(field.key)"
+              :http-request="({ file }) => uploadFieldFile(field, file as File)"
+            >
+              <div v-if="form[field.key]" class="media-preview">
+                <img
+                  v-if="!isVideoCoverUrl(String(form[field.key]))"
+                  :src="form[field.key]"
+                  alt="封面预览"
+                />
+                <video v-else :src="form[field.key]" controls @click.stop />
+                <div class="media-preview-mask">
+                  <span>{{
+                    isUploadFieldLoading(field.key) ? "上传中..." : "重新上传"
+                  }}</span>
+                </div>
+              </div>
+              <div v-else class="media-upload-trigger">
+                <IconifyIconOnline icon="ri:upload-cloud-2-line" />
+                <span>{{
+                  isUploadFieldLoading(field.key)
+                    ? "上传中..."
+                    : "点击上传图片或视频"
+                }}</span>
+              </div>
+            </el-upload>
+            <el-button
+              v-if="form[field.key]"
+              link
+              type="danger"
+              :disabled="isUploadFieldLoading(field.key)"
+              @click="form[field.key] = ''"
+            >
+              移除封面
+            </el-button>
+          </div>
           <el-input
             v-else
             v-model="form[field.key]"
@@ -1025,6 +1125,33 @@ h1 {
   height: 62px;
 }
 
+.resource-table :deep(td.action-column .cell) {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.table-actions {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  gap: 0;
+  align-items: center;
+  justify-content: flex-end;
+  white-space: nowrap;
+}
+
+.table-actions :deep(.el-button) {
+  height: 28px;
+  padding: 0 8px;
+  margin: 0;
+  line-height: 28px;
+}
+
+.table-actions :deep(.el-dropdown) {
+  display: inline-flex;
+  align-items: center;
+}
+
 .table-pagination {
   display: flex;
   justify-content: flex-end;
@@ -1119,6 +1246,73 @@ h1 {
 
 .points-form {
   margin-top: 18px;
+}
+
+.media-upload {
+  width: 100%;
+}
+
+.media-uploader {
+  width: 100%;
+}
+
+.media-uploader :deep(.el-upload) {
+  display: block;
+  width: 100%;
+}
+
+.media-upload-trigger,
+.media-preview {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 160px;
+  overflow: hidden;
+  color: #7a7d8b;
+  cursor: pointer;
+  background: #faf9fc;
+  border: 1px dashed #d8d5e5;
+  border-radius: 12px;
+  transition: 0.2s;
+}
+
+.media-upload-trigger:hover,
+.media-preview:hover {
+  border-color: #b8aef0;
+}
+
+.media-upload-trigger svg,
+.media-upload-trigger .iconify {
+  font-size: 28px;
+  color: #8d7df0;
+}
+
+.media-preview img,
+.media-preview video {
+  display: block;
+  width: 100%;
+  max-height: 220px;
+  object-fit: cover;
+}
+
+.media-preview-mask {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  background: rgb(20 18 32 / 42%);
+  opacity: 0;
+  transition: 0.2s;
+}
+
+.media-preview:hover .media-preview-mask {
+  opacity: 1;
 }
 
 @media (width <= 760px) {

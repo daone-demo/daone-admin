@@ -1,4 +1,4 @@
-export type FieldType = "text" | "textarea" | "number" | "select";
+export type FieldType = "text" | "textarea" | "number" | "select" | "upload";
 
 export interface ResourceField {
   key: string;
@@ -6,6 +6,7 @@ export interface ResourceField {
   type?: FieldType;
   options?: string[];
   required?: boolean;
+  accept?: string;
   /** 仅在新增时展示，编辑时隐藏（如模型编码） */
   createOnly?: boolean;
 }
@@ -396,13 +397,18 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
           "ARCHITECTURE"
         ]
       },
-      { key: "coverUrl", label: "封面 URL" },
+      {
+        key: "coverUrl",
+        label: "封面",
+        type: "upload",
+        accept: "image/*,video/*"
+      },
       { key: "prompt", label: "创作提示词", type: "textarea" }
     ],
     columns: [
       { key: "title", label: "灵感内容" },
       { key: "categoryCode", label: "分类编码" },
-      { key: "coverUrl", label: "封面 URL" },
+      { key: "coverUrl", label: "封面" },
       { key: "prompt", label: "创作提示词" },
       { key: "updatedAt", label: "更新时间" },
       { key: "status", label: "状态", width: 100 }
