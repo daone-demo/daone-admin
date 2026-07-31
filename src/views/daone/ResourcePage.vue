@@ -5,7 +5,105 @@ import { ElMessage, ElMessageBox } from "element-plus";
 import { resourceConfigs, type ResourceField } from "./resourceData";
 import { adminApi } from "@/api/admin";
 import { getToken } from "@/utils/auth";
+
 defineOptions({ name: "DaoneResourcePage" });
+
+const buildCategoryTree = (items: Array<Record<string, any>>) => {
+  const map = new Map<string, Record<string, any>>();
+  const roots: Array<Record<string, any>> = [];
+
+  items.forEach(item => {
+    map.set(item.categoryCode, { ...item, children: [] });
+  });
+
+  items.forEach(item => {
+    const node = map.get(item.categoryCode);
+    if (!node) return;
+    const parentCode = String(item.parentCode || "").trim();
+    if (parentCode && map.has(parentCode)) {
+      map.get(parentCode)?.children.push(node);
+    } else {
+      roots.push(node);
+    }
+  });
+
+  const sortNodes = (nodes: Array<Record<string, any>>) => {
+    nodes.sort((a, b) => Number(a.sortNo || 0) - Number(b.sortNo || 0));
+    nodes.forEach(node => {
+      if (node.children?.length) {
+        sortNodes(node.children);
+      } else {
+        delete node.children;
+      }
+    });
+  };
+  sortNodes(roots);
+  return roots;
+};
+
+const filterCategoriesWithParents = (
+  items: Array<Record<string, any>>,
+  predicate: (item: Record<string, any>) => boolean
+) => {
+  const codeToItem = new Map(
+    items.map(item => [String(item.categoryCode), item])
+  );
+  const matched = new Set<string>();
+
+  items.forEach(item => {
+    if (!predicate(item)) return;
+    matched.add(String(item.categoryCode));
+    let parentCode = String(item.parentCode || "").trim();
+    while (parentCode && codeToItem.has(parentCode)) {
+      matched.add(parentCode);
+      parentCode = String(codeToItem.get(parentCode)?.parentCode || "").trim();
+    }
+  });
+
+  return items.filter(item => matched.has(String(item.categoryCode)));
+};
+
+const buildCategorySelectOptions = (items: Array<Record<string, any>>) => {
+  const codeToName = new Map(
+    items.map(item => [String(item.categoryCode), String(item.categoryName)])
+  );
+
+  return [...items]
+    .sort((a, b) => {
+      const aParent = String(a.parentCode || "").trim();
+      const bParent = String(b.parentCode || "").trim();
+      if (aParent !== bParent) return aParent.localeCompare(bParent);
+      return Number(a.sortNo || 0) - Number(b.sortNo || 0);
+    })
+    .map(item => {
+      const parentCode = String(item.parentCode || "").trim();
+      const parentName = parentCode ? codeToName.get(parentCode) : "";
+      const label = parentName
+        ? `${parentName} / ${item.categoryName}`
+        : String(item.categoryName);
+      return {
+        label,
+        value: String(item.categoryCode)
+      };
+    });
+};
+
+const normalizeCategoryItems = (items: Array<Record<string, any>>) =>
+  items.map(item => ({
+    ...item,
+    categoryCode: String(item.categoryCode || ""),
+    categoryName: String(item.categoryName || item.categoryCode || ""),
+    parentCode: String(item.parentCode || "").trim(),
+    scope: String(item.scope || "ALL"),
+    status: String(item.status || "ENABLED"),
+    sortNo: Number(item.sortNo || 0)
+  }));
+
+const isCategoryEnabled = (item: Record<string, any>) =>
+  ["ENABLED", "启用"].includes(String(item.status || ""));
+
+const isInspirationScope = (item: Record<string, any>) =>
+  ["ALL", "INSPIRATION"].includes(String(item.scope || ""));
 
 const route = useRoute();
 const resourceKey = computed(() => String((route.meta as any).resource || ""));
@@ -19,6 +117,8 @@ const editingId = ref("");
 const current = ref<Record<string, any>>({});
 const form = reactive<Record<string, any>>({});
 const records = ref<Array<Record<string, any>>>([]);
+const categoryOptions = ref<Array<{ label: string; value: string }>>([]);
+const categoryOptionsLoading = ref(false);
 const loading = ref(false);
 const apiError = ref("");
 const currentPage = ref(1);
@@ -49,6 +149,17 @@ const formatOrderPayType = (value: string) =>
 
 const formatOrderStatus = (value: string) =>
   orderStatusLabels[String(value || "").toUpperCase()] || value;
+
+const formatCategoryLevel = (row: Record<string, any>) => {
+  const level = Number(
+    row.level ?? (String(row.parentCode || "").trim() ? 2 : 1)
+  );
+  if (level === 2) {
+    const parentCode = String(row.parentCode || "").trim();
+    return parentCode ? `二级类目 ${parentCode}` : "二级类目";
+  }
+  return "一级类目";
+};
 
 const resetRecords = () => {
   records.value = config.value?.records.map(item => ({ ...item })) || [];
@@ -145,11 +256,19 @@ const normalizeRemoteRows = (items: any[]) => {
     }));
   }
   if (resourceKey.value === "categories") {
-    return items.map(item => ({
-      ...item,
-      id: item.id || item.categoryCode,
-      status: normalizeStatus(item.status)
-    }));
+    return items.map(item => {
+      const parentCode = String(item.parentCode || "").trim();
+      const level = Number(item.level ?? (parentCode ? 2 : 1));
+      return {
+        ...item,
+        id: String(item.id || item.categoryCode || item.code),
+        categoryCode: String(item.categoryCode || item.code || ""),
+        categoryName: String(item.categoryName || item.name || ""),
+        parentCode,
+        level,
+        status: normalizeStatus(item.status)
+      };
+    });
   }
   return items.map(item => ({
     ...item,
@@ -158,10 +277,41 @@ const normalizeRemoteRows = (items: any[]) => {
   }));
 };
 
+const loadCategoryOptions = async () => {
+  const fallbackItems = normalizeCategoryItems(
+    resourceConfigs.categories.records
+  ).filter(item => isCategoryEnabled(item) && isInspirationScope(item));
+
+  if (!hasAdminToken()) {
+    categoryOptions.value = buildCategorySelectOptions(fallbackItems);
+    return;
+  }
+
+  categoryOptionsLoading.value = true;
+  try {
+    const items = await fetchPaginatedResource(params =>
+      adminApi.categories(params)
+    );
+    const normalized = normalizeCategoryItems(items).filter(
+      item => isCategoryEnabled(item) && isInspirationScope(item)
+    );
+    categoryOptions.value = buildCategorySelectOptions(
+      normalized.length ? normalized : fallbackItems
+    );
+  } catch {
+    categoryOptions.value = buildCategorySelectOptions(fallbackItems);
+  } finally {
+    categoryOptionsLoading.value = false;
+  }
+};
+
 const loadRemote = async () => {
   resetRecords();
   apiError.value = "";
   if (!shouldUseApi()) {
+    if (resourceKey.value === "inspirations") {
+      await loadCategoryOptions();
+    }
     return;
   }
   loading.value = true;
@@ -189,7 +339,9 @@ const loadRemote = async () => {
     } else if (apiResource === "inspirations") {
       items = normalizeList(await adminApi.inspirations());
     } else if (apiResource === "categories") {
-      items = normalizeList(await adminApi.categories());
+      items = await fetchPaginatedResource(params =>
+        adminApi.categories(params)
+      );
     }
     records.value = normalizeRemoteRows(items);
   } catch (error: any) {
@@ -198,13 +350,16 @@ const loadRemote = async () => {
   } finally {
     loading.value = false;
   }
+  if (resourceKey.value === "inspirations") {
+    await loadCategoryOptions();
+  }
 };
 
 watch(resourceKey, loadRemote, { immediate: true });
 
 const filteredRecords = computed(() => {
   const word = keyword.value.trim().toLowerCase();
-  return records.value.filter(item => {
+  const predicate = (item: Record<string, any>) => {
     const matchesWord =
       !word ||
       (config.value.searchable || []).some(key =>
@@ -215,13 +370,41 @@ const filteredRecords = computed(() => {
     return (
       matchesWord && (!statusFilter.value || item.status === statusFilter.value)
     );
-  });
+  };
+
+  if (config.value?.treeMode && resourceKey.value === "categories") {
+    return filterCategoriesWithParents(records.value, predicate);
+  }
+
+  return records.value.filter(predicate);
 });
 
-const paginatedRecords = computed(() => {
+const tableRecords = computed(() => {
+  if (config.value?.treeMode && resourceKey.value === "categories") {
+    return buildCategoryTree(filteredRecords.value);
+  }
   const start = (currentPage.value - 1) * pageSize.value;
   return filteredRecords.value.slice(start, start + pageSize.value);
 });
+
+const isTreeMode = computed(
+  () => Boolean(config.value?.treeMode) && resourceKey.value === "categories"
+);
+
+const topLevelCategories = computed(() =>
+  records.value.filter(item => !String(item.parentCode || "").trim())
+);
+
+const parentCategoryOptions = computed(() => {
+  const editingCode = String(
+    current.value?.categoryCode || form.categoryCode || ""
+  );
+  return topLevelCategories.value.filter(
+    item => item.categoryCode !== editingCode
+  );
+});
+
+const paginatedRecords = computed(() => tableRecords.value);
 
 watch([keyword, statusFilter], () => {
   currentPage.value = 1;
@@ -248,13 +431,16 @@ const activeCount = computed(
     ).length
 );
 
-const openEditor = (row?: Record<string, any>) => {
+const openEditor = async (row?: Record<string, any>) => {
   editingId.value = row?.id || "";
   current.value = row || {};
   Object.keys(form).forEach(key => delete form[key]);
   config.value.fields.forEach(field => {
     form[field.key] = row?.[field.key] ?? (field.type === "number" ? 0 : "");
   });
+  if (resourceKey.value === "inspirations") {
+    await loadCategoryOptions();
+  }
   dialogVisible.value = true;
 };
 
@@ -333,10 +519,13 @@ const toApiPayload = () => {
   }
   if (resourceKey.value === "categories") {
     return {
-      categoryCode: form.categoryCode,
-      categoryName: form.categoryName,
-      scope: form.scope || "ALL",
-      sortNo: Number(form.sortNo || 0)
+      attributes: current.value?.attributes || {},
+      categoryCode: String(form.categoryCode || "").trim(),
+      categoryName: String(form.categoryName || "").trim(),
+      parentCode: String(form.parentCode || "").trim(),
+      scope: "ALL",
+      sortNo: Number(form.sortNo || 0),
+      ...(!editingId.value ? { status: "ENABLED" } : {})
     };
   }
   if (resourceKey.value === "invoices") {
@@ -412,7 +601,7 @@ const save = async () => {
       }
       if (resourceKey.value === "categories") {
         editingId.value
-          ? await adminApi.updateCategory(String(form.categoryCode), payload)
+          ? await adminApi.updateCategory(String(editingId.value), payload)
           : await adminApi.createCategory(payload);
       }
       if (resourceKey.value === "invoices") {
@@ -460,7 +649,7 @@ const remove = async (row: Record<string, any>) => {
       if (resourceKey.value === "workflows")
         await adminApi.deleteWorkflow(String(row.id));
       if (resourceKey.value === "categories")
-        await adminApi.deleteCategory(String(row.categoryCode));
+        await adminApi.deleteCategory(String(row.id));
       if (resourceKey.value === "pointPackages")
         await adminApi.deletePointPackage(String(row.id));
       await loadRemote();
@@ -491,10 +680,7 @@ const toggleStatus = async (row: Record<string, any>) => {
       if (resourceKey.value === "inspirations")
         await adminApi.updateInspirationStatus(String(row.id), apiStatus);
       if (resourceKey.value === "categories")
-        await adminApi.updateCategoryStatus(
-          String(row.categoryCode),
-          apiStatus
-        );
+        await adminApi.updateCategoryStatus(String(row.id), apiStatus);
       if (resourceKey.value === "workflows")
         await adminApi.updateWorkflowStatus(String(row.id), apiStatus);
       if (resourceKey.value === "pointPackages")
@@ -555,6 +741,18 @@ const inputType = (field: ResourceField) =>
     : field.type === "number"
       ? "number"
       : "text";
+
+const isParentCategoryField = (field: ResourceField) =>
+  field.optionsFrom === "topLevelCategories";
+
+const isCategoryListField = (field: ResourceField) =>
+  field.optionsFrom === "categoryList";
+
+const categoryLabelMap = computed(() =>
+  Object.fromEntries(
+    categoryOptions.value.map(item => [item.value, item.label])
+  )
+);
 
 const uploadFieldLoading = ref<Record<string, boolean>>({});
 
@@ -691,6 +889,12 @@ const uploadFieldFile = async (field: ResourceField, file: File) => {
         class="resource-table"
         :class="{ 'resource-table--full': isTableFullWidth }"
         :style="isTableFullWidth ? { width: '100%' } : undefined"
+        :tree-props="
+          isTreeMode
+            ? { children: 'children', hasChildren: 'hasChildren' }
+            : undefined
+        "
+        :default-expand-all="isTreeMode"
       >
         <el-table-column
           v-for="column in config.columns"
@@ -759,6 +963,12 @@ const uploadFieldFile = async (field: ResourceField, file: File) => {
               "
             >
               {{ Number(row[column.key] || 0).toLocaleString() }}
+            </span>
+            <span v-else-if="column.key === 'level'">
+              {{ formatCategoryLevel(row) }}
+            </span>
+            <span v-else-if="column.key === 'categoryCode'">
+              {{ categoryLabelMap[row.categoryCode] || row.categoryCode }}
             </span>
             <span v-else>{{ row[column.key] }}</span>
           </template>
@@ -830,7 +1040,7 @@ const uploadFieldFile = async (field: ResourceField, file: File) => {
         </template>
       </el-table>
 
-      <div class="table-pagination">
+      <div v-if="!isTreeMode" class="table-pagination">
         <el-pagination
           v-model:current-page="currentPage"
           v-model:page-size="pageSize"
@@ -839,6 +1049,9 @@ const uploadFieldFile = async (field: ResourceField, file: File) => {
           background
           layout="total, sizes, prev, pager, next, jumper"
         />
+      </div>
+      <div v-else class="table-pagination tree-record-count">
+        共 {{ filteredRecords.length }} 条（含二级分类）
       </div>
     </section>
 
@@ -863,13 +1076,34 @@ const uploadFieldFile = async (field: ResourceField, file: File) => {
             v-model="form[field.key]"
             class="w-full"
             :placeholder="`请选择${field.label}`"
+            :loading="isCategoryListField(field) && categoryOptionsLoading"
+            clearable
           >
-            <el-option
-              v-for="option in field.options"
-              :key="option"
-              :label="option"
-              :value="option"
-            />
+            <template v-if="isParentCategoryField(field)">
+              <el-option label="无（一级分类）" value="" />
+              <el-option
+                v-for="option in parentCategoryOptions"
+                :key="option.categoryCode"
+                :label="option.categoryName"
+                :value="option.categoryCode"
+              />
+            </template>
+            <template v-else-if="isCategoryListField(field)">
+              <el-option
+                v-for="option in categoryOptions"
+                :key="option.value"
+                :label="option.label"
+                :value="option.value"
+              />
+            </template>
+            <template v-else>
+              <el-option
+                v-for="option in field.options"
+                :key="option"
+                :label="option"
+                :value="option"
+              />
+            </template>
           </el-select>
           <div v-else-if="field.type === 'upload'" class="media-upload">
             <el-upload
@@ -1156,6 +1390,11 @@ h1 {
   display: flex;
   justify-content: flex-end;
   padding-top: 16px;
+}
+
+.tree-record-count {
+  font-size: 13px;
+  color: #9699a4;
 }
 
 .resource-table--full {

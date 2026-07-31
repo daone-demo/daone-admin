@@ -351,10 +351,16 @@ export const adminApi = {
     );
   },
   categories(
-    params: { keyword?: string; status?: string; scope?: string } = {}
+    params: {
+      keyword?: string;
+      status?: string;
+      scope?: string;
+      page?: number;
+      pageSize?: number;
+    } = {}
   ) {
     return unwrap(client.get("/admin/v1/categories", { params })) as Promise<
-      { items?: any[] } | any[]
+      AdminPage | { items?: any[] } | any[]
     >;
   },
   createCategory(data: Record<string, any>) {

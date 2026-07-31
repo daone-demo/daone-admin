@@ -5,6 +5,8 @@ export interface ResourceField {
   label: string;
   type?: FieldType;
   options?: string[];
+  /** 动态选项来源 */
+  optionsFrom?: "topLevelCategories" | "categoryList";
   required?: boolean;
   accept?: string;
   /** 仅在新增时展示，编辑时隐藏（如模型编码） */
@@ -34,6 +36,8 @@ export interface ResourceConfig {
   searchable?: string[];
   /** 表格列均分铺满容器宽度 */
   tableFullWidth?: boolean;
+  /** 树形表格，通过 parentCode 构建父子层级 */
+  treeMode?: boolean;
   fields: ResourceField[];
   columns: Array<{
     key: string;
@@ -385,17 +389,9 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
       { key: "title", label: "标题", required: true },
       {
         key: "categoryCode",
-        label: "分类编码",
+        label: "分类",
         type: "select",
-        options: [
-          "BRAND",
-          "POSTER",
-          "ILLUSTRATION",
-          "UI",
-          "CHARACTER",
-          "PRODUCT",
-          "ARCHITECTURE"
-        ]
+        optionsFrom: "categoryList"
       },
       {
         key: "coverUrl",
@@ -407,7 +403,7 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
     ],
     columns: [
       { key: "title", label: "灵感内容" },
-      { key: "categoryCode", label: "分类编码" },
+      { key: "categoryCode", label: "分类" },
       { key: "coverUrl", label: "封面" },
       { key: "prompt", label: "创作提示词" },
       { key: "updatedAt", label: "更新时间" },
@@ -449,64 +445,124 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
     icon: "ri:folder-3-line",
     color: "#00cec9",
     apiResource: "categories",
+    treeMode: true,
     createText: "新增分类",
     allowDelete: true,
     allowStatus: true,
-    searchable: ["categoryName", "categoryCode", "scope"],
+    searchable: ["categoryName", "categoryCode"],
     fields: [
       { key: "categoryName", label: "分类名称", required: true },
-      { key: "categoryCode", label: "分类编码", required: true },
       {
-        key: "scope",
-        label: "使用范围",
+        key: "categoryCode",
+        label: "分类编码",
+        required: true,
+        createOnly: true
+      },
+      {
+        key: "parentCode",
+        label: "父级分类",
         type: "select",
-        options: ["ALL", "INSPIRATION", "TEMPLATE"]
+        optionsFrom: "topLevelCategories"
       },
       { key: "sortNo", label: "排序", type: "number" }
     ],
     columns: [
       { key: "categoryName", label: "分类名称" },
       { key: "categoryCode", label: "分类编码" },
-      { key: "scope", label: "使用范围" },
+      { key: "level", label: "类目等级", width: 110 },
       { key: "contentCount", label: "内容数" },
       { key: "sortNo", label: "排序" },
       { key: "status", label: "状态", width: 100 }
     ],
     records: [
       {
-        id: "C-01",
+        id: "10101",
         categoryName: "品牌设计",
         categoryCode: "BRAND",
+        parentCode: "",
         scope: "ALL",
         contentCount: 128,
         sortNo: 10,
         status: status()
       },
       {
-        id: "C-02",
+        id: "10102",
         categoryName: "海报与广告",
         categoryCode: "POSTER",
+        parentCode: "",
         scope: "ALL",
         contentCount: 96,
         sortNo: 20,
         status: status()
       },
       {
-        id: "C-03",
+        id: "10103",
         categoryName: "插画",
         categoryCode: "ILLUSTRATION",
+        parentCode: "",
         scope: "INSPIRATION",
         contentCount: 74,
         sortNo: 30,
         status: status()
       },
       {
-        id: "C-04",
-        categoryName: "视频与分镜",
-        categoryCode: "VIDEO",
-        scope: "TEMPLATE",
-        contentCount: 32,
+        id: "10104",
+        categoryName: "UI 界面",
+        categoryCode: "UI",
+        parentCode: "",
+        scope: "ALL",
+        contentCount: 52,
         sortNo: 40,
+        status: status()
+      },
+      {
+        id: "10105",
+        categoryName: "角色设计",
+        categoryCode: "CHARACTER",
+        parentCode: "",
+        scope: "INSPIRATION",
+        contentCount: 0,
+        sortNo: 50,
+        status: status()
+      },
+      {
+        id: "10111",
+        categoryName: "Logo 设计",
+        categoryCode: "BRAND_LOGO",
+        parentCode: "BRAND",
+        scope: "ALL",
+        contentCount: 45,
+        sortNo: 10,
+        status: status()
+      },
+      {
+        id: "10112",
+        categoryName: "VI 视觉",
+        categoryCode: "BRAND_VI",
+        parentCode: "BRAND",
+        scope: "ALL",
+        contentCount: 38,
+        sortNo: 20,
+        status: status()
+      },
+      {
+        id: "10121",
+        categoryName: "促销海报",
+        categoryCode: "POSTER_PROMO",
+        parentCode: "POSTER",
+        scope: "ALL",
+        contentCount: 56,
+        sortNo: 10,
+        status: status()
+      },
+      {
+        id: "10122",
+        categoryName: "社交媒体广告",
+        categoryCode: "POSTER_SOCIAL",
+        parentCode: "POSTER",
+        scope: "INSPIRATION",
+        contentCount: 40,
+        sortNo: 20,
         status: status()
       }
     ]
