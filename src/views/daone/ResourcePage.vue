@@ -2,9 +2,15 @@
 import { computed, reactive, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { ElMessage, ElMessageBox } from "element-plus";
+import { watchDebounced } from "@vueuse/core";
 import { resourceConfigs, type ResourceField } from "./resourceData";
 import { adminApi } from "@/api/admin";
 import { getToken } from "@/utils/auth";
+import {
+  formatDateTime,
+  formatRecordDates,
+  isDateTimeField
+} from "@/utils/date";
 
 defineOptions({ name: "DaoneResourcePage" });
 
@@ -110,6 +116,8 @@ const resourceKey = computed(() => String((route.meta as any).resource || ""));
 const config = computed(() => resourceConfigs[resourceKey.value]);
 const keyword = ref("");
 const statusFilter = ref("");
+const payTypeFilter = ref("");
+const orderDateRange = ref<[string, string] | null>(null);
 const dialogVisible = ref(false);
 const detailVisible = ref(false);
 const pointsVisible = ref(false);
@@ -144,6 +152,19 @@ const orderStatusLabels: Record<string, string> = {
   REFUNDED: "已退款"
 };
 
+const orderStatusOptions = [
+  { label: "待支付", value: "PENDING" },
+  { label: "支付中", value: "PAYING" },
+  { label: "已支付", value: "PAID" },
+  { label: "已取消", value: "CANCELLED" },
+  { label: "已退款", value: "REFUNDED" }
+];
+
+const orderPayTypeOptions = [
+  { label: "微信", value: "WECHAT" },
+  { label: "支付宝", value: "ALIPAY" }
+];
+
 const formatOrderPayType = (value: string) =>
   orderPayTypeLabels[String(value || "").toUpperCase()] || value;
 
@@ -161,11 +182,32 @@ const formatCategoryLevel = (row: Record<string, any>) => {
   return "一级类目";
 };
 
-const resetRecords = () => {
-  records.value = config.value?.records.map(item => ({ ...item })) || [];
+const resetFilters = () => {
   keyword.value = "";
   statusFilter.value = "";
+  payTypeFilter.value = "";
+  orderDateRange.value = null;
   currentPage.value = 1;
+};
+
+const resetRecords = () => {
+  records.value =
+    config.value?.records.map(item => formatRecordDates({ ...item })) || [];
+  resetFilters();
+};
+
+const useServerFilters = () =>
+  Boolean(config.value?.serverFilters) && shouldUseApi();
+
+const buildOrderQueryParams = () => {
+  const params: Record<string, string> = {};
+  const word = keyword.value.trim();
+  if (word) params.keyword = word;
+  if (statusFilter.value) params.status = statusFilter.value;
+  if (payTypeFilter.value) params.payType = payTypeFilter.value;
+  if (orderDateRange.value?.[0]) params.dateFrom = orderDateRange.value[0];
+  if (orderDateRange.value?.[1]) params.dateTo = orderDateRange.value[1];
+  return params;
 };
 
 const normalizeList = (payload: any) =>
@@ -195,49 +237,46 @@ const normalizeRemoteRows = (items: any[]) => {
   const normalizeStatus = (value: string) =>
     value === "DISABLED" ? "停用" : value === "ENABLED" ? "启用" : value;
 
+  let rows: Array<Record<string, any>>;
+
   if (resourceKey.value === "users") {
-    return items.map(item => ({
+    rows = items.map(item => ({
       ...item,
       id: String(item.id),
       status: item.status === "ENABLED" ? "启用" : "停用"
     }));
-  }
-  if (resourceKey.value === "orders") {
-    return items.map(item => ({
+  } else if (resourceKey.value === "orders") {
+    rows = items.map(item => ({
       ...item,
       id: item.orderNo,
       amountYuan: Number(item.amountFen || 0) / 100,
       payType: formatOrderPayType(item.payType),
       status: formatOrderStatus(item.status)
     }));
-  }
-  if (resourceKey.value === "invoices") {
-    return items.map(item => ({
+  } else if (resourceKey.value === "invoices") {
+    rows = items.map(item => ({
       ...item,
       id: item.id || item.invoiceId,
       amountYuan: Number(item.amountFen || 0) / 100
     }));
-  }
-  if (resourceKey.value === "plans") {
-    return items.map(plan => ({
+  } else if (resourceKey.value === "plans") {
+    rows = items.map(plan => ({
       ...plan,
       id: plan.id || plan.planCode,
       benefitsText: (plan.benefits || []).join("\n"),
       benefitSummary: (plan.benefits || []).join("；"),
       status: plan.status === "ENABLED" ? "启用" : "停用"
     }));
-  }
-  if (resourceKey.value === "models") {
-    return items.map(item => ({
+  } else if (resourceKey.value === "models") {
+    rows = items.map(item => ({
       ...item,
       id: item.id || item.modelCode,
       countMin: item.parameters?.count?.min ?? 1,
       countMax: item.parameters?.count?.max ?? 1,
       status: item.status === "ENABLED" ? "启用" : "停用"
     }));
-  }
-  if (resourceKey.value === "pointPackages") {
-    return items.map(item => ({
+  } else if (resourceKey.value === "pointPackages") {
+    rows = items.map(item => ({
       ...item,
       id: String(item.id),
       grantPoints: Number(item.grantPoints || 0),
@@ -245,18 +284,16 @@ const normalizeRemoteRows = (items: any[]) => {
       priceYuan: Number(item.priceFen || 0) / 100,
       status: normalizeStatus(item.status)
     }));
-  }
-  if (resourceKey.value === "workflows") {
-    return items.map(item => ({
+  } else if (resourceKey.value === "workflows") {
+    rows = items.map(item => ({
       ...item,
       id: item.id || item.workflowId,
       workflowDataText: JSON.stringify(item.workflowData || {}, null, 2),
       nodeCount: item.nodeCount ?? Object.keys(item.workflowData || {}).length,
       status: normalizeStatus(item.status)
     }));
-  }
-  if (resourceKey.value === "categories") {
-    return items.map(item => {
+  } else if (resourceKey.value === "categories") {
+    rows = items.map(item => {
       const parentCode = String(item.parentCode || "").trim();
       const level = Number(item.level ?? (parentCode ? 2 : 1));
       return {
@@ -269,12 +306,15 @@ const normalizeRemoteRows = (items: any[]) => {
         status: normalizeStatus(item.status)
       };
     });
+  } else {
+    rows = items.map(item => ({
+      ...item,
+      id: item.id || item.code,
+      status: normalizeStatus(item.status || "ENABLED")
+    }));
   }
-  return items.map(item => ({
-    ...item,
-    id: item.id || item.code,
-    status: normalizeStatus(item.status || "ENABLED")
-  }));
+
+  return rows.map(row => formatRecordDates(row));
 };
 
 const loadCategoryOptions = async () => {
@@ -305,10 +345,17 @@ const loadCategoryOptions = async () => {
   }
 };
 
-const loadRemote = async () => {
-  resetRecords();
+const loadRemote = async (options: { resetFilters?: boolean } = {}) => {
+  if (options.resetFilters) {
+    resetFilters();
+  }
   apiError.value = "";
   if (!shouldUseApi()) {
+    records.value =
+      config.value?.records.map(item => formatRecordDates({ ...item })) || [];
+    if (options.resetFilters) {
+      resetFilters();
+    }
     if (resourceKey.value === "inspirations") {
       await loadCategoryOptions();
     }
@@ -327,7 +374,9 @@ const loadRemote = async () => {
     } else if (apiResource === "invoices") {
       items = await fetchPaginatedResource(params => adminApi.invoices(params));
     } else if (apiResource === "orders") {
-      items = await fetchPaginatedResource(params => adminApi.orders(params));
+      items = await fetchPaginatedResource(params =>
+        adminApi.orders({ ...buildOrderQueryParams(), ...params })
+      );
     } else if (apiResource === "plans") {
       items = normalizeList(await adminApi.plans());
     } else if (apiResource === "pointPackages") {
@@ -355,9 +404,16 @@ const loadRemote = async () => {
   }
 };
 
-watch(resourceKey, loadRemote, { immediate: true });
+watch(resourceKey, () => {
+  resetFilters();
+  loadRemote();
+});
 
 const filteredRecords = computed(() => {
+  if (useServerFilters()) {
+    return records.value;
+  }
+
   const word = keyword.value.trim().toLowerCase();
   const predicate = (item: Record<string, any>) => {
     const matchesWord =
@@ -407,8 +463,27 @@ const parentCategoryOptions = computed(() => {
 const paginatedRecords = computed(() => tableRecords.value);
 
 watch([keyword, statusFilter], () => {
+  if (useServerFilters()) return;
   currentPage.value = 1;
 });
+
+watch([statusFilter, payTypeFilter, orderDateRange], () => {
+  if (!useServerFilters()) return;
+  currentPage.value = 1;
+  loadRemote();
+});
+
+watchDebounced(
+  keyword,
+  () => {
+    if (!useServerFilters()) return;
+    currentPage.value = 1;
+    loadRemote();
+  },
+  { debounce: 400 }
+);
+
+loadRemote();
 
 const statuses = computed(() => [
   ...new Set(records.value.map(item => item.status).filter(Boolean))
@@ -628,8 +703,8 @@ const save = async () => {
       id: `${resourceKey.value.toUpperCase().slice(0, 3)}-${Date.now().toString().slice(-6)}`,
       ...form,
       status: "启用",
-      createdAt: new Date().toLocaleString("zh-CN", { hour12: false }),
-      updatedAt: new Date().toLocaleString("zh-CN", { hour12: false })
+      createdAt: formatDateTime(new Date()),
+      updatedAt: formatDateTime(new Date())
     });
   }
   dialogVisible.value = false;
@@ -831,7 +906,7 @@ const uploadFieldFile = async (field: ResourceField, file: File) => {
       </el-button>
     </section>
 
-    <section v-if="!config.hideMetrics" class="metric-grid">
+    <!-- <section v-if="!config.hideMetrics" class="metric-grid">
       <div class="metric-card">
         <span>全部记录</span>
         <strong>{{ records.length }}</strong>
@@ -847,7 +922,7 @@ const uploadFieldFile = async (field: ResourceField, file: File) => {
         <strong>{{ Math.min(records.length, 3) }}</strong>
         <small>较昨日保持稳定</small>
       </div>
-    </section>
+    </section> -->
 
     <section class="table-card">
       <div class="toolbar">
@@ -855,7 +930,7 @@ const uploadFieldFile = async (field: ResourceField, file: File) => {
           v-model="keyword"
           clearable
           class="search"
-          placeholder="搜索名称、编号或关键词"
+          :placeholder="config.searchPlaceholder || '搜索名称、编号或关键词'"
         >
           <template #prefix>
             <IconifyIconOnline icon="ri:search-line" />
@@ -867,14 +942,48 @@ const uploadFieldFile = async (field: ResourceField, file: File) => {
           placeholder="全部状态"
           class="status-filter"
         >
+          <template v-if="config.serverFilters">
+            <el-option
+              v-for="item in orderStatusOptions"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
+          </template>
+          <template v-else>
+            <el-option
+              v-for="item in statuses"
+              :key="item"
+              :label="item"
+              :value="item"
+            />
+          </template>
+        </el-select>
+        <el-select
+          v-if="config.serverFilters"
+          v-model="payTypeFilter"
+          clearable
+          placeholder="支付方式"
+          class="pay-type-filter"
+        >
           <el-option
-            v-for="item in statuses"
-            :key="item"
-            :label="item"
-            :value="item"
+            v-for="item in orderPayTypeOptions"
+            :key="item.value"
+            :label="item.label"
+            :value="item.value"
           />
         </el-select>
-        <el-button @click="loadRemote">
+        <el-date-picker
+          v-if="config.serverFilters"
+          v-model="orderDateRange"
+          type="daterange"
+          range-separator="至"
+          start-placeholder="开始日期"
+          end-placeholder="结束日期"
+          value-format="YYYY-MM-DD"
+          class="date-filter"
+        />
+        <el-button @click="loadRemote({ resetFilters: true })">
           <IconifyIconOnline icon="ri:refresh-line" />
           重置
         </el-button>
@@ -968,6 +1077,9 @@ const uploadFieldFile = async (field: ResourceField, file: File) => {
             </span>
             <span v-else-if="column.key === 'categoryCode'">
               {{ categoryLabelMap[row.categoryCode] || row.categoryCode }}
+            </span>
+            <span v-else-if="isDateTimeField(column.key)">
+              {{ formatDateTime(row[column.key]) }}
             </span>
             <span v-else>{{ row[column.key] }}</span>
           </template>
@@ -1178,7 +1290,11 @@ const uploadFieldFile = async (field: ResourceField, file: File) => {
           :key="column.key"
           :label="column.label"
         >
-          {{ current[column.key] }}
+          {{
+            isDateTimeField(column.key)
+              ? formatDateTime(current[column.key])
+              : current[column.key]
+          }}
         </el-descriptions-item>
       </el-descriptions>
       <div v-if="resourceKey === 'users'" class="detail-section">
@@ -1338,8 +1454,13 @@ h1 {
   width: 310px;
 }
 
-.status-filter {
+.status-filter,
+.pay-type-filter {
   width: 150px;
+}
+
+.date-filter {
+  width: 260px;
 }
 
 .record-count {
@@ -1577,7 +1698,10 @@ h1 {
     flex-wrap: wrap;
   }
 
-  .search {
+  .search,
+  .status-filter,
+  .pay-type-filter,
+  .date-filter {
     width: 100%;
   }
 }

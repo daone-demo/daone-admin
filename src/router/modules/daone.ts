@@ -121,7 +121,7 @@ export default [
         path: "/finance/orders",
         name: "OrderList",
         component: ResourcePage,
-        meta: { title: "订单", resource: "orders" } as any
+        meta: { title: "订单列表", resource: "orders" } as any
       }
     ]
   }

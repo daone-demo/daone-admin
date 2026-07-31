@@ -40,6 +40,10 @@ export interface ResourceConfig {
   treeMode?: boolean;
   /** 隐藏顶部统计卡片 */
   hideMetrics?: boolean;
+  /** 搜索框占位文案 */
+  searchPlaceholder?: string;
+  /** 使用接口参数进行服务端筛选 */
+  serverFilters?: boolean;
   fields: ResourceField[];
   columns: Array<{
     key: string;
@@ -577,6 +581,8 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
     icon: "ri:bank-card-line",
     color: "#636e72",
     apiResource: "orders",
+    serverFilters: true,
+    searchPlaceholder: "搜索订单号、用户 ID 或商品",
     allowCreate: false,
     allowDelete: false,
     searchable: ["orderNo", "userId", "productName", "payType"],
