@@ -199,9 +199,7 @@ const login = async () => {
   padding: 42px 56px;
   overflow: hidden;
   color: #fff;
-  background:
-    radial-gradient(circle at 80% 15%, rgb(255 255 255 / 15%), transparent 28%),
-    linear-gradient(145deg, #5847c7 0%, #7462e3 55%, #907ff0 100%);
+  background: #000;
 }
 
 .brand-panel::after {
@@ -232,7 +230,7 @@ const login = async () => {
   width: 36px;
   height: 36px;
   font-weight: 900;
-  color: #6c5ce7;
+  color: #000;
   background: #fff;
   border-radius: 11px;
 }
@@ -276,7 +274,7 @@ const login = async () => {
 
 .feature-list svg {
   padding: 3px;
-  color: #6c5ce7;
+  color: #000;
   background: #fff;
   border-radius: 50%;
 }
@@ -349,10 +347,10 @@ const login = async () => {
   height: 49px;
   margin-top: 25px;
   font-weight: 700;
-  background: linear-gradient(90deg, #6150d0, #7b69e7);
+  background: #000;
   border: 0;
   border-radius: 11px;
-  box-shadow: 0 10px 24px rgb(97 80 208 / 24%);
+  box-shadow: 0 10px 24px rgb(0 0 0 / 18%);
 }
 
 .login-button svg {
@@ -393,7 +391,7 @@ const login = async () => {
 
   .mobile-brand .brand-mark {
     color: #fff;
-    background: #6c5ce7;
+    background: #000;
   }
 }
 </style>

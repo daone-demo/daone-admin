@@ -38,6 +38,8 @@ export interface ResourceConfig {
   tableFullWidth?: boolean;
   /** 树形表格，通过 parentCode 构建父子层级 */
   treeMode?: boolean;
+  /** 隐藏顶部统计卡片 */
+  hideMetrics?: boolean;
   fields: ResourceField[];
   columns: Array<{
     key: string;
@@ -301,6 +303,7 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
     icon: "ri:vip-crown-line",
     color: "#fdcb6e",
     apiResource: "plans",
+    hideMetrics: true,
     allowDelete: false,
     allowStatus: true,
     createText: "新增套餐",
@@ -324,6 +327,7 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
     icon: "ri:coin-line",
     color: "#6a5ae0",
     apiResource: "pointPackages",
+    hideMetrics: true,
     allowDelete: true,
     allowStatus: true,
     tableFullWidth: true,

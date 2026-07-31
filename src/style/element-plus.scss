@@ -2,6 +2,39 @@
   font-weight: 700;
 }
 
+/* 全局按钮背景统一为黑色 */
+$button-black: #000;
+$button-black-hover: #1a1a1a;
+$button-black-active: #333;
+
+.el-button:not(.is-link, .is-text, .is-plain),
+.el-button.is-text.is-has-bg {
+  --el-button-bg-color: #{$button-black};
+  --el-button-border-color: #{$button-black};
+  --el-button-text-color: #fff;
+  --el-button-hover-bg-color: #{$button-black-hover};
+  --el-button-hover-border-color: #{$button-black-hover};
+  --el-button-hover-text-color: #fff;
+  --el-button-active-bg-color: #{$button-black-active};
+  --el-button-active-border-color: #{$button-black-active};
+  --el-button-active-text-color: #fff;
+  --el-button-disabled-bg-color: #666;
+  --el-button-disabled-border-color: #666;
+  --el-button-disabled-text-color: #fff;
+}
+
+.el-button.is-plain:not(.is-link, .is-text) {
+  --el-button-bg-color: #fff;
+  --el-button-border-color: #{$button-black};
+  --el-button-text-color: #{$button-black};
+  --el-button-hover-bg-color: #{$button-black};
+  --el-button-hover-border-color: #{$button-black};
+  --el-button-hover-text-color: #fff;
+  --el-button-active-bg-color: #{$button-black-active};
+  --el-button-active-border-color: #{$button-black-active};
+  --el-button-active-text-color: #fff;
+}
+
 .el-breadcrumb__inner,
 .el-breadcrumb__inner a {
   font-weight: 400 !important;

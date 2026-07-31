@@ -817,7 +817,6 @@ const uploadFieldFile = async (field: ResourceField, file: File) => {
         <IconifyIconOnline :icon="config.icon" />
       </div>
       <div class="hero-copy">
-        <div class="eyebrow">DAONE OPERATIONS</div>
         <h1>{{ config.title }}</h1>
         <p>{{ config.description }}</p>
       </div>
@@ -832,7 +831,7 @@ const uploadFieldFile = async (field: ResourceField, file: File) => {
       </el-button>
     </section>
 
-    <section class="metric-grid">
+    <section v-if="!config.hideMetrics" class="metric-grid">
       <div class="metric-card">
         <span>全部记录</span>
         <strong>{{ records.length }}</strong>

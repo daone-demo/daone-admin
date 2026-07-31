@@ -2,21 +2,21 @@ const Layout = () => import("@/layout/index.vue");
 const ResourcePage = () => import("@/views/daone/ResourcePage.vue");
 
 export default [
-  {
-    path: "/workflows",
-    name: "Workflows",
-    component: Layout,
-    redirect: "/workflows/list",
-    meta: { title: "配置工作流", icon: "ri:flow-chart", rank: 1 },
-    children: [
-      {
-        path: "/workflows/list",
-        name: "WorkflowList",
-        component: ResourcePage,
-        meta: { title: "工作流列表", resource: "workflows" } as any
-      }
-    ]
-  },
+  // {
+  //   path: "/workflows",
+  //   name: "Workflows",
+  //   component: Layout,
+  //   redirect: "/workflows/list",
+  //   meta: { title: "配置工作流", icon: "ri:flow-chart", rank: 1 },
+  //   children: [
+  //     {
+  //       path: "/workflows/list",
+  //       name: "WorkflowList",
+  //       component: ResourcePage,
+  //       meta: { title: "工作流列表", resource: "workflows" } as any
+  //     }
+  //   ]
+  // },
   {
     path: "/users",
     name: "Users",
@@ -115,7 +115,7 @@ export default [
     name: "Finance",
     component: Layout,
     redirect: "/finance/orders",
-    meta: { title: "财务管理", icon: "ri:money-cny-circle-line", rank: 7 },
+    meta: { title: "财务管理", icon: "ri:money-cny-circle-line", rank: 1 },
     children: [
       {
         path: "/finance/orders",

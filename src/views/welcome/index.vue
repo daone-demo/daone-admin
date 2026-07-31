@@ -263,7 +263,6 @@ onMounted(() => {
   <div v-loading="loading" class="dashboard">
     <section class="welcome-card">
       <div>
-        <span class="eyebrow">DAONE OPERATIONS CENTER</span>
         <h1>{{ greeting }}，{{ displayName }}</h1>
         <p>整体业务运行稳定，以下是今日运营概览。</p>
       </div>
