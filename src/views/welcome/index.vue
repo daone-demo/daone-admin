@@ -385,28 +385,27 @@ onMounted(() => {
   padding: 30px 34px;
   overflow: hidden;
   color: #fff;
-  background:
-    radial-gradient(circle at 82% 20%, rgb(255 255 255 / 18%), transparent 26%),
-    linear-gradient(125deg, #5f4bd8, #8370ee);
+  background: #000;
   border-radius: 20px;
-  box-shadow: 0 18px 45px rgb(91 70 205 / 22%);
+  box-shadow: 0 18px 45px rgb(0 0 0 / 18%);
 }
 
 .eyebrow {
   font-size: 10px;
   font-weight: 800;
+  color: #fff;
   letter-spacing: 0.2em;
-  opacity: 0.72;
 }
 
 .welcome-card h1 {
   margin: 8px 0;
   font-size: 27px;
+  color: #fff;
 }
 
 .welcome-card p {
   margin: 0;
-  opacity: 0.78;
+  color: #fff;
 }
 
 .welcome-orb {
