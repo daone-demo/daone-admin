@@ -14,20 +14,30 @@ import {
 
 defineOptions({ name: "DaoneResourcePage" });
 
-const buildCategoryTree = (items: Array<Record<string, any>>) => {
+type CategoryTreeLinkMode = "parentCode" | "parentId";
+
+const getCategoryNodeKey = (linkMode: CategoryTreeLinkMode) =>
+  linkMode === "parentId" ? "id" : "categoryCode";
+
+const buildCategoryTree = (
+  items: Array<Record<string, any>>,
+  linkMode: CategoryTreeLinkMode = "parentCode"
+) => {
+  const nodeKey = getCategoryNodeKey(linkMode);
   const map = new Map<string, Record<string, any>>();
   const roots: Array<Record<string, any>> = [];
 
   items.forEach(item => {
-    map.set(item.categoryCode, { ...item, children: [] });
+    map.set(String(item[nodeKey]), { ...item, children: [] });
   });
 
   items.forEach(item => {
-    const node = map.get(item.categoryCode);
+    const key = String(item[nodeKey]);
+    const node = map.get(key);
     if (!node) return;
-    const parentCode = String(item.parentCode || "").trim();
-    if (parentCode && map.has(parentCode)) {
-      map.get(parentCode)?.children.push(node);
+    const parentValue = String(item[linkMode] ?? "").trim();
+    if (parentValue && map.has(parentValue)) {
+      map.get(parentValue)?.children.push(node);
     } else {
       roots.push(node);
     }
@@ -49,47 +59,74 @@ const buildCategoryTree = (items: Array<Record<string, any>>) => {
 
 const filterCategoriesWithParents = (
   items: Array<Record<string, any>>,
-  predicate: (item: Record<string, any>) => boolean
+  predicate: (item: Record<string, any>) => boolean,
+  linkMode: CategoryTreeLinkMode = "parentCode"
 ) => {
-  const codeToItem = new Map(
-    items.map(item => [String(item.categoryCode), item])
-  );
+  const nodeKey = getCategoryNodeKey(linkMode);
+  const codeToItem = new Map(items.map(item => [String(item[nodeKey]), item]));
   const matched = new Set<string>();
 
   items.forEach(item => {
     if (!predicate(item)) return;
-    matched.add(String(item.categoryCode));
-    let parentCode = String(item.parentCode || "").trim();
-    while (parentCode && codeToItem.has(parentCode)) {
-      matched.add(parentCode);
-      parentCode = String(codeToItem.get(parentCode)?.parentCode || "").trim();
+    matched.add(String(item[nodeKey]));
+    let parentValue = String(item[linkMode] ?? "").trim();
+    while (parentValue && codeToItem.has(parentValue)) {
+      matched.add(parentValue);
+      parentValue = String(
+        codeToItem.get(parentValue)?.[linkMode] ?? ""
+      ).trim();
     }
   });
 
-  return items.filter(item => matched.has(String(item.categoryCode)));
+  return items.filter(item => matched.has(String(item[nodeKey])));
+};
+
+const flattenMaterialCategoryTree = (
+  nodes: Array<Record<string, any>>,
+  parentId: string | number | null = null
+): Array<Record<string, any>> => {
+  const result: Array<Record<string, any>> = [];
+  (nodes || []).forEach(node => {
+    const { children = [], ...rest } = node;
+    const normalizedParentId = rest.parentId ?? parentId ?? "";
+    result.push({
+      ...rest,
+      parentId:
+        normalizedParentId === null || normalizedParentId === undefined
+          ? ""
+          : normalizedParentId
+    });
+    if (children.length) {
+      result.push(...flattenMaterialCategoryTree(children, rest.id));
+    }
+  });
+  return result;
 };
 
 const buildCategorySelectOptions = (items: Array<Record<string, any>>) => {
-  const codeToName = new Map(
-    items.map(item => [String(item.categoryCode), String(item.categoryName)])
+  const idToName = new Map(
+    items.map(item => [
+      String(item.id || item.categoryCode),
+      String(item.categoryName)
+    ])
   );
 
   return [...items]
     .sort((a, b) => {
-      const aParent = String(a.parentCode || "").trim();
-      const bParent = String(b.parentCode || "").trim();
+      const aParent = String(a.parentId || "").trim();
+      const bParent = String(b.parentId || "").trim();
       if (aParent !== bParent) return aParent.localeCompare(bParent);
       return Number(a.sortNo || 0) - Number(b.sortNo || 0);
     })
     .map(item => {
-      const parentCode = String(item.parentCode || "").trim();
-      const parentName = parentCode ? codeToName.get(parentCode) : "";
+      const parentId = String(item.parentId || "").trim();
+      const parentName = parentId ? idToName.get(parentId) : "";
       const label = parentName
         ? `${parentName} / ${item.categoryName}`
         : String(item.categoryName);
       return {
         label,
-        value: String(item.categoryCode)
+        value: String(item.categoryCode || item.id)
       };
     });
 };
@@ -97,10 +134,35 @@ const buildCategorySelectOptions = (items: Array<Record<string, any>>) => {
 const normalizeCategoryItems = (items: Array<Record<string, any>>) =>
   items.map(item => ({
     ...item,
+    id: String(item.id || item.categoryCode || ""),
+    categoryCode: String(item.categoryCode || item.code || item.id || ""),
+    categoryName: String(
+      item.categoryName || item.name || item.categoryCode || ""
+    ),
+    parentId:
+      item.parentId === null ||
+      item.parentId === undefined ||
+      item.parentId === ""
+        ? ""
+        : String(item.parentId),
+    scope: String(item.scope || "ALL"),
+    status: String(item.status || "ENABLED"),
+    sortNo: Number(item.sortNo || 0),
+    level: Number(item.level ?? 1)
+  }));
+
+const normalizeMaterialCategoryItems = (items: Array<Record<string, any>>) =>
+  items.map(item => ({
+    ...item,
+    id: String(item.id || ""),
     categoryCode: String(item.categoryCode || ""),
     categoryName: String(item.categoryName || item.categoryCode || ""),
-    parentCode: String(item.parentCode || "").trim(),
-    scope: String(item.scope || "ALL"),
+    parentId:
+      item.parentId === null ||
+      item.parentId === undefined ||
+      item.parentId === ""
+        ? ""
+        : String(item.parentId),
     status: String(item.status || "ENABLED"),
     sortNo: Number(item.sortNo || 0)
   }));
@@ -108,14 +170,37 @@ const normalizeCategoryItems = (items: Array<Record<string, any>>) =>
 const isCategoryEnabled = (item: Record<string, any>) =>
   ["ENABLED", "启用"].includes(String(item.status || ""));
 
-const isInspirationScope = (item: Record<string, any>) =>
-  ["ALL", "INSPIRATION"].includes(String(item.scope || ""));
+const isRelevantCategoryScope = (
+  item: Record<string, any>,
+  categoryScope?: "INSPIRATION" | "MATERIAL"
+) => {
+  const scope = String(item.scope || "");
+  if (categoryScope === "MATERIAL") {
+    return ["ALL", "MATERIAL"].includes(scope);
+  }
+  if (categoryScope === "INSPIRATION") {
+    return ["ALL", "INSPIRATION"].includes(scope);
+  }
+  return true;
+};
 
 const route = useRoute();
 const resourceKey = computed(() => String((route.meta as any).resource || ""));
 const config = computed(() => resourceConfigs[resourceKey.value]);
+const isContentListResource = computed(() =>
+  ["inspirations", "materials"].includes(resourceKey.value)
+);
+const isMaterialResource = computed(() => resourceKey.value === "materials");
+const isCategoryResource = computed(() =>
+  ["categories", "materialCategories"].includes(resourceKey.value)
+);
+const isMaterialCategoryResource = computed(
+  () => resourceKey.value === "materialCategories"
+);
+const categoryTreeLinkMode = computed<CategoryTreeLinkMode>(() => "parentId");
 const keyword = ref("");
 const statusFilter = ref("");
+const categoryFilter = ref("");
 const payTypeFilter = ref("");
 const orderDateRange = ref<[string, string] | null>(null);
 const dialogVisible = ref(false);
@@ -129,6 +214,7 @@ const categoryOptions = ref<Array<{ label: string; value: string }>>([]);
 const categoryOptionsLoading = ref(false);
 const loading = ref(false);
 const apiError = ref("");
+const remoteTotal = ref(0);
 const currentPage = ref(1);
 const pageSize = ref(10);
 const PAGE_SIZES = [10, 20, 50, 100];
@@ -165,19 +251,33 @@ const orderPayTypeOptions = [
   { label: "支付宝", value: "ALIPAY" }
 ];
 
+const materialStatusOptions = [
+  { label: "启用", value: "ENABLED" },
+  { label: "停用", value: "DISABLED" }
+];
+
+const materialTypeLabels: Record<string, string> = {
+  IMAGE: "图片",
+  VIDEO: "视频",
+  TEXT: "文字"
+};
+
 const formatOrderPayType = (value: string) =>
   orderPayTypeLabels[String(value || "").toUpperCase()] || value;
 
 const formatOrderStatus = (value: string) =>
   orderStatusLabels[String(value || "").toUpperCase()] || value;
 
+const formatMaterialType = (value: string) =>
+  materialTypeLabels[String(value || "").toUpperCase()] || value;
+
 const formatCategoryLevel = (row: Record<string, any>) => {
-  const level = Number(
-    row.level ?? (String(row.parentCode || "").trim() ? 2 : 1)
-  );
-  if (level === 2) {
-    const parentCode = String(row.parentCode || "").trim();
-    return parentCode ? `二级类目 ${parentCode}` : "二级类目";
+  const level = Number(row.level ?? 1);
+  if (level >= 2) {
+    const parent = records.value.find(
+      item => String(item.id) === String(row.parentId)
+    );
+    return parent ? `二级类目 ${parent.categoryName}` : "二级类目";
   }
   return "一级类目";
 };
@@ -185,6 +285,7 @@ const formatCategoryLevel = (row: Record<string, any>) => {
 const resetFilters = () => {
   keyword.value = "";
   statusFilter.value = "";
+  categoryFilter.value = "";
   payTypeFilter.value = "";
   orderDateRange.value = null;
   currentPage.value = 1;
@@ -199,6 +300,9 @@ const resetRecords = () => {
 const useServerFilters = () =>
   Boolean(config.value?.serverFilters) && shouldUseApi();
 
+const useServerPagination = () =>
+  Boolean(config.value?.serverPagination) && shouldUseApi();
+
 const buildOrderQueryParams = () => {
   const params: Record<string, string> = {};
   const word = keyword.value.trim();
@@ -209,6 +313,36 @@ const buildOrderQueryParams = () => {
   if (orderDateRange.value?.[1]) params.dateTo = orderDateRange.value[1];
   return params;
 };
+
+const buildMaterialQueryParams = () => {
+  const params: Record<string, string> = {};
+  const word = keyword.value.trim();
+  if (word) params.keyword = word;
+  if (statusFilter.value) params.status = statusFilter.value;
+  if (categoryFilter.value) params.categoryCode = categoryFilter.value;
+  return params;
+};
+
+const buildCategoryQueryParams = () => {
+  const params: Record<string, string> = {};
+  const word = keyword.value.trim();
+  if (word) params.keyword = word;
+  if (statusFilter.value) params.status = statusFilter.value;
+  return params;
+};
+
+const statusFilterOptions = computed(() => {
+  if (
+    (isMaterialResource.value || resourceKey.value === "categories") &&
+    config.value?.serverFilters
+  ) {
+    return materialStatusOptions;
+  }
+  if (config.value?.serverFilters) {
+    return orderStatusOptions;
+  }
+  return statuses.value.map(item => ({ label: item, value: item }));
+});
 
 const normalizeList = (payload: any) =>
   Array.isArray(payload) ? payload : payload?.items || payload?.records || [];
@@ -292,18 +426,65 @@ const normalizeRemoteRows = (items: any[]) => {
       nodeCount: item.nodeCount ?? Object.keys(item.workflowData || {}).length,
       status: normalizeStatus(item.status)
     }));
+  } else if (resourceKey.value === "materials") {
+    rows = items.map(item => ({
+      ...item,
+      id: String(item.id),
+      type: String(item.type || ""),
+      sortNo: Number(item.sortNo || 0),
+      updatedAt: item.updatedAt || item.gmtModified || item.createdAt,
+      status: normalizeStatus(item.status)
+    }));
+  } else if (resourceKey.value === "materialCategories") {
+    rows = items.map(item => {
+      const parentId =
+        item.parentId === null || item.parentId === undefined
+          ? ""
+          : item.parentId;
+      const level = Number(
+        item.level ?? (parentId !== "" && parentId !== null ? 2 : 1)
+      );
+      return {
+        ...item,
+        id: String(item.id),
+        categoryCode: String(item.categoryCode || ""),
+        categoryName: String(item.categoryName || ""),
+        parentId:
+          parentId === "" || parentId === null || parentId === undefined
+            ? ""
+            : String(parentId),
+        level,
+        status: normalizeStatus(item.status)
+      };
+    });
   } else if (resourceKey.value === "categories") {
     rows = items.map(item => {
-      const parentCode = String(item.parentCode || "").trim();
-      const level = Number(item.level ?? (parentCode ? 2 : 1));
+      const parentIdRaw = item.parentId ?? "";
+      const parentId =
+        parentIdRaw === null || parentIdRaw === undefined || parentIdRaw === ""
+          ? ""
+          : String(parentIdRaw);
+      const level = Number(item.level ?? (parentId ? 2 : 1));
       return {
         ...item,
         id: String(item.id || item.categoryCode || item.code),
-        categoryCode: String(item.categoryCode || item.code || ""),
+        categoryCode: String(item.categoryCode || item.code || item.id || ""),
         categoryName: String(item.categoryName || item.name || ""),
-        parentCode,
+        parentId,
         level,
         status: normalizeStatus(item.status)
+      };
+    });
+    const codeToId = new Map(
+      rows.map(row => [String(row.categoryCode), String(row.id)])
+    );
+    rows = rows.map(row => {
+      if (row.parentId) return row;
+      const legacyParentCode = String(row.parentCode || "").trim();
+      if (!legacyParentCode) return row;
+      return {
+        ...row,
+        parentId: codeToId.get(legacyParentCode) || legacyParentCode
       };
     });
   } else {
@@ -317,10 +498,24 @@ const normalizeRemoteRows = (items: any[]) => {
   return rows.map(row => formatRecordDates(row));
 };
 
+const loadMaterialCategoryItems = async () => {
+  const tree = normalizeList(await adminApi.materialCategoryTree());
+  return flattenMaterialCategoryTree(tree);
+};
+
 const loadCategoryOptions = async () => {
-  const fallbackItems = normalizeCategoryItems(
-    resourceConfigs.categories.records
-  ).filter(item => isCategoryEnabled(item) && isInspirationScope(item));
+  const fallbackSource =
+    resourceKey.value === "materials"
+      ? resourceConfigs.materialCategories.records
+      : resourceConfigs.categories.records;
+  const fallbackItems =
+    resourceKey.value === "materials"
+      ? normalizeMaterialCategoryItems(fallbackSource).filter(isCategoryEnabled)
+      : normalizeCategoryItems(fallbackSource).filter(
+          item =>
+            isCategoryEnabled(item) &&
+            isRelevantCategoryScope(item, config.value?.categoryScope)
+        );
 
   if (!hasAdminToken()) {
     categoryOptions.value = buildCategorySelectOptions(fallbackItems);
@@ -329,12 +524,26 @@ const loadCategoryOptions = async () => {
 
   categoryOptionsLoading.value = true;
   try {
-    const items = await fetchPaginatedResource(params =>
-      adminApi.categories(params)
-    );
-    const normalized = normalizeCategoryItems(items).filter(
-      item => isCategoryEnabled(item) && isInspirationScope(item)
-    );
+    let items: Array<Record<string, any>> = [];
+    if (resourceKey.value === "materials") {
+      items = await loadMaterialCategoryItems();
+    } else {
+      const scope = config.value?.categoryScope;
+      items = await fetchPaginatedResource(params =>
+        adminApi.categories({
+          ...params,
+          ...(scope ? { scope } : {})
+        })
+      );
+    }
+    const normalized =
+      resourceKey.value === "materials"
+        ? normalizeMaterialCategoryItems(items).filter(isCategoryEnabled)
+        : normalizeCategoryItems(items).filter(
+            item =>
+              isCategoryEnabled(item) &&
+              isRelevantCategoryScope(item, config.value?.categoryScope)
+          );
     categoryOptions.value = buildCategorySelectOptions(
       normalized.length ? normalized : fallbackItems
     );
@@ -356,7 +565,7 @@ const loadRemote = async (options: { resetFilters?: boolean } = {}) => {
     if (options.resetFilters) {
       resetFilters();
     }
-    if (resourceKey.value === "inspirations") {
+    if (isContentListResource.value) {
       await loadCategoryOptions();
     }
     return;
@@ -387,10 +596,34 @@ const loadRemote = async (options: { resetFilters?: boolean } = {}) => {
       items = normalizeList(await adminApi.promptTemplates());
     } else if (apiResource === "inspirations") {
       items = normalizeList(await adminApi.inspirations());
-    } else if (apiResource === "categories") {
+    } else if (apiResource === "materials") {
       items = await fetchPaginatedResource(params =>
-        adminApi.categories(params)
+        adminApi.materials({ ...buildMaterialQueryParams(), ...params })
       );
+    } else if (apiResource === "materialCategories") {
+      items = await loadMaterialCategoryItems();
+    } else if (apiResource === "categories") {
+      const scope = config.value?.categoryScope;
+      if (config.value?.serverPagination) {
+        const payload = await adminApi.categories({
+          ...buildCategoryQueryParams(),
+          ...(scope ? { scope } : {}),
+          page: currentPage.value,
+          pageSize: pageSize.value
+        });
+        remoteTotal.value = Number(
+          payload?.total ?? normalizeList(payload).length
+        );
+        items = normalizeList(payload);
+      } else {
+        items = await fetchPaginatedResource(params =>
+          adminApi.categories({
+            ...params,
+            ...(scope ? { scope } : {})
+          })
+        );
+        remoteTotal.value = items.length;
+      }
     }
     records.value = normalizeRemoteRows(items);
   } catch (error: any) {
@@ -399,7 +632,7 @@ const loadRemote = async (options: { resetFilters?: boolean } = {}) => {
   } finally {
     loading.value = false;
   }
-  if (resourceKey.value === "inspirations") {
+  if (isContentListResource.value) {
     await loadCategoryOptions();
   }
 };
@@ -410,7 +643,7 @@ watch(resourceKey, () => {
 });
 
 const filteredRecords = computed(() => {
-  if (useServerFilters()) {
+  if (useServerFilters() || useServerPagination()) {
     return records.value;
   }
 
@@ -428,55 +661,75 @@ const filteredRecords = computed(() => {
     );
   };
 
-  if (config.value?.treeMode && resourceKey.value === "categories") {
-    return filterCategoriesWithParents(records.value, predicate);
+  if (config.value?.treeMode && isCategoryResource.value) {
+    return filterCategoriesWithParents(
+      records.value,
+      predicate,
+      categoryTreeLinkMode.value
+    );
   }
 
   return records.value.filter(predicate);
 });
 
 const tableRecords = computed(() => {
-  if (config.value?.treeMode && resourceKey.value === "categories") {
-    return buildCategoryTree(filteredRecords.value);
+  if (config.value?.treeMode && isCategoryResource.value) {
+    return buildCategoryTree(filteredRecords.value, categoryTreeLinkMode.value);
   }
   const start = (currentPage.value - 1) * pageSize.value;
   return filteredRecords.value.slice(start, start + pageSize.value);
 });
 
 const isTreeMode = computed(
-  () => Boolean(config.value?.treeMode) && resourceKey.value === "categories"
+  () => Boolean(config.value?.treeMode) && isCategoryResource.value
 );
 
 const topLevelCategories = computed(() =>
-  records.value.filter(item => !String(item.parentCode || "").trim())
+  records.value.filter(
+    item =>
+      item.parentId === "" ||
+      item.parentId === null ||
+      item.parentId === undefined ||
+      Number(item.level) === 1
+  )
 );
 
 const parentCategoryOptions = computed(() => {
-  const editingCode = String(
-    current.value?.categoryCode || form.categoryCode || ""
-  );
-  return topLevelCategories.value.filter(
-    item => item.categoryCode !== editingCode
-  );
+  const editingCategoryId = String(current.value?.id || editingId.value || "");
+  return topLevelCategories.value
+    .filter(item => String(item.id) !== editingCategoryId)
+    .map(item => ({
+      label: item.categoryName,
+      value: item.id
+    }));
 });
+
+const paginationTotal = computed(() =>
+  useServerPagination() ? remoteTotal.value : filteredRecords.value.length
+);
 
 const paginatedRecords = computed(() => tableRecords.value);
 
 watch([keyword, statusFilter], () => {
-  if (useServerFilters()) return;
+  if (useServerFilters() || useServerPagination()) return;
   currentPage.value = 1;
 });
 
-watch([statusFilter, payTypeFilter, orderDateRange], () => {
-  if (!useServerFilters()) return;
+watch([statusFilter, payTypeFilter, orderDateRange, categoryFilter], () => {
+  if (!useServerFilters() && !useServerPagination()) return;
   currentPage.value = 1;
+  loadRemote();
+});
+
+watch([currentPage, pageSize], () => {
+  if (!useServerPagination()) return;
   loadRemote();
 });
 
 watchDebounced(
   keyword,
   () => {
-    if (!useServerFilters()) return;
+    if (!useServerFilters() && !useServerPagination()) return;
     currentPage.value = 1;
     loadRemote();
   },
@@ -490,7 +743,7 @@ const statuses = computed(() => [
 ]);
 
 const editorFields = computed(() => {
-  const fields = config.value?.fields || [];
+  const fields = (config.value?.fields || []).filter(field => !field.hidden);
   if (editingId.value) {
     return fields.filter(field => !field.createOnly);
   }
@@ -513,7 +766,7 @@ const openEditor = async (row?: Record<string, any>) => {
   config.value.fields.forEach(field => {
     form[field.key] = row?.[field.key] ?? (field.type === "number" ? 0 : "");
   });
-  if (resourceKey.value === "inspirations") {
+  if (isContentListResource.value) {
     await loadCategoryOptions();
   }
   dialogVisible.value = true;
@@ -592,16 +845,41 @@ const toApiPayload = () => {
       workflowData
     };
   }
-  if (resourceKey.value === "categories") {
-    return {
-      attributes: current.value?.attributes || {},
-      categoryCode: String(form.categoryCode || "").trim(),
+  if (resourceKey.value === "materialCategories") {
+    const parentId = form.parentId;
+    const payload: Record<string, any> = {
       categoryName: String(form.categoryName || "").trim(),
-      parentCode: String(form.parentCode || "").trim(),
-      scope: "ALL",
+      parentId:
+        parentId === "" || parentId === null || parentId === undefined
+          ? null
+          : Number(parentId),
       sortNo: Number(form.sortNo || 0),
       ...(!editingId.value ? { status: "ENABLED" } : {})
     };
+    if (editingId.value && current.value?.categoryCode) {
+      payload.categoryCode = String(current.value.categoryCode).trim();
+    }
+    return payload;
+  }
+  if (resourceKey.value === "categories") {
+    const parentId = form.parentId;
+    const payload: Record<string, any> = {
+      attributes: current.value?.attributes || {},
+      categoryName: String(form.categoryName || "").trim(),
+      parentId:
+        parentId === "" || parentId === null || parentId === undefined
+          ? null
+          : Number(parentId),
+      scope: config.value?.categoryScope || "ALL",
+      sortNo: Number(form.sortNo || 0),
+      ...(!editingId.value ? { status: "ENABLED" } : {})
+    };
+    if (editingId.value) {
+      payload.categoryCode = String(
+        current.value?.categoryCode || editingId.value
+      ).trim();
+    }
+    return payload;
   }
   if (resourceKey.value === "invoices") {
     return {
@@ -619,6 +897,17 @@ const toApiPayload = () => {
       name: form.name,
       scenario: form.scenario,
       content: form.content
+    };
+  }
+  if (resourceKey.value === "materials") {
+    return {
+      title: form.title,
+      type: form.type || "IMAGE",
+      categoryCode: form.categoryCode,
+      resourceUrl: form.resourceUrl,
+      coverUrl: form.coverUrl,
+      sortNo: Number(form.sortNo || 0),
+      ...(!editingId.value ? { status: "ENABLED" } : {})
     };
   }
   if (resourceKey.value === "inspirations") {
@@ -674,6 +963,16 @@ const save = async () => {
           ? await adminApi.updateInspiration(editingId.value, payload)
           : await adminApi.createInspiration(payload);
       }
+      if (resourceKey.value === "materials") {
+        editingId.value
+          ? await adminApi.updateMaterial(editingId.value, payload)
+          : await adminApi.createMaterial(payload);
+      }
+      if (resourceKey.value === "materialCategories") {
+        editingId.value
+          ? await adminApi.updateMaterialCategory(editingId.value, payload)
+          : await adminApi.createMaterialCategory(payload);
+      }
       if (resourceKey.value === "categories") {
         editingId.value
           ? await adminApi.updateCategory(String(editingId.value), payload)
@@ -723,6 +1022,10 @@ const remove = async (row: Record<string, any>) => {
     try {
       if (resourceKey.value === "workflows")
         await adminApi.deleteWorkflow(String(row.id));
+      if (resourceKey.value === "materials")
+        await adminApi.deleteMaterial(String(row.id));
+      if (resourceKey.value === "materialCategories")
+        await adminApi.deleteMaterialCategory(String(row.id));
       if (resourceKey.value === "categories")
         await adminApi.deleteCategory(String(row.id));
       if (resourceKey.value === "pointPackages")
@@ -754,6 +1057,10 @@ const toggleStatus = async (row: Record<string, any>) => {
         await adminApi.updatePromptTemplateStatus(String(row.code), apiStatus);
       if (resourceKey.value === "inspirations")
         await adminApi.updateInspirationStatus(String(row.id), apiStatus);
+      if (resourceKey.value === "materials")
+        await adminApi.updateMaterialStatus(String(row.id), apiStatus);
+      if (resourceKey.value === "materialCategories")
+        await adminApi.updateMaterialCategoryStatus(String(row.id), apiStatus);
       if (resourceKey.value === "categories")
         await adminApi.updateCategoryStatus(String(row.id), apiStatus);
       if (resourceKey.value === "workflows")
@@ -863,7 +1170,7 @@ const uploadFieldFile = async (field: ResourceField, file: File) => {
 
   uploadFieldLoading.value[field.key] = true;
   try {
-    if (resourceKey.value === "inspirations") {
+    if (isMaterialResource.value || resourceKey.value === "inspirations") {
       const result = await adminApi.uploadFile(file);
       form[field.key] = result.url || "";
     } else {
@@ -942,25 +1249,30 @@ const uploadFieldFile = async (field: ResourceField, file: File) => {
           placeholder="全部状态"
           class="status-filter"
         >
-          <template v-if="config.serverFilters">
-            <el-option
-              v-for="item in orderStatusOptions"
-              :key="item.value"
-              :label="item.label"
-              :value="item.value"
-            />
-          </template>
-          <template v-else>
-            <el-option
-              v-for="item in statuses"
-              :key="item"
-              :label="item"
-              :value="item"
-            />
-          </template>
+          <el-option
+            v-for="item in statusFilterOptions"
+            :key="item.value"
+            :label="item.label"
+            :value="item.value"
+          />
         </el-select>
         <el-select
-          v-if="config.serverFilters"
+          v-if="isMaterialResource"
+          v-model="categoryFilter"
+          clearable
+          placeholder="全部分类"
+          class="category-filter"
+          :loading="categoryOptionsLoading"
+        >
+          <el-option
+            v-for="option in categoryOptions"
+            :key="option.value"
+            :label="option.label"
+            :value="option.value"
+          />
+        </el-select>
+        <el-select
+          v-if="config.serverFilters && resourceKey === 'orders'"
           v-model="payTypeFilter"
           clearable
           placeholder="支付方式"
@@ -974,7 +1286,7 @@ const uploadFieldFile = async (field: ResourceField, file: File) => {
           />
         </el-select>
         <el-date-picker
-          v-if="config.serverFilters"
+          v-if="config.serverFilters && resourceKey === 'orders'"
           v-model="orderDateRange"
           type="daterange"
           range-separator="至"
@@ -987,7 +1299,7 @@ const uploadFieldFile = async (field: ResourceField, file: File) => {
           <IconifyIconOnline icon="ri:refresh-line" />
           重置
         </el-button>
-        <div class="record-count">共 {{ filteredRecords.length }} 条</div>
+        <div class="record-count">共 {{ paginationTotal }} 条</div>
       </div>
 
       <el-table
@@ -1075,6 +1387,49 @@ const uploadFieldFile = async (field: ResourceField, file: File) => {
             <span v-else-if="column.key === 'level'">
               {{ formatCategoryLevel(row) }}
             </span>
+            <span v-else-if="column.key === 'type'">
+              {{ formatMaterialType(row.type) }}
+            </span>
+            <div
+              v-else-if="column.key === 'coverUrl' && row.coverUrl"
+              class="media-cell"
+            >
+              <img
+                v-if="!isVideoCoverUrl(row.coverUrl)"
+                :src="row.coverUrl"
+                alt="封面"
+                class="media-thumb"
+              />
+              <video v-else :src="row.coverUrl" class="media-thumb" muted />
+            </div>
+            <div
+              v-else-if="
+                column.key === 'resourceUrl' &&
+                row.resourceUrl &&
+                row.type === 'IMAGE'
+              "
+              class="media-cell"
+            >
+              <img :src="row.resourceUrl" alt="素材" class="material-media" />
+            </div>
+            <video
+              v-else-if="
+                column.key === 'resourceUrl' &&
+                row.resourceUrl &&
+                row.type === 'VIDEO'
+              "
+              :src="row.resourceUrl"
+              class="material-media"
+              muted
+              controls
+            />
+            <span
+              v-else-if="column.key === 'resourceUrl'"
+              class="resource-url"
+              :title="row.resourceUrl"
+            >
+              {{ row.resourceUrl }}
+            </span>
             <span v-else-if="column.key === 'categoryCode'">
               {{ categoryLabelMap[row.categoryCode] || row.categoryCode }}
             </span>
@@ -1151,12 +1506,12 @@ const uploadFieldFile = async (field: ResourceField, file: File) => {
         </template>
       </el-table>
 
-      <div v-if="!isTreeMode" class="table-pagination">
+      <div v-if="!isTreeMode || useServerPagination()" class="table-pagination">
         <el-pagination
           v-model:current-page="currentPage"
           v-model:page-size="pageSize"
           :page-sizes="PAGE_SIZES"
-          :total="filteredRecords.length"
+          :total="paginationTotal"
           background
           layout="total, sizes, prev, pager, next, jumper"
         />
@@ -1194,9 +1549,9 @@ const uploadFieldFile = async (field: ResourceField, file: File) => {
               <el-option label="无（一级分类）" value="" />
               <el-option
                 v-for="option in parentCategoryOptions"
-                :key="option.categoryCode"
-                :label="option.categoryName"
-                :value="option.categoryCode"
+                :key="option.value"
+                :label="option.label"
+                :value="option.value"
               />
             </template>
             <template v-else-if="isCategoryListField(field)">
@@ -1459,6 +1814,10 @@ h1 {
   width: 150px;
 }
 
+.category-filter {
+  width: 100px;
+}
+
 .date-filter {
   width: 260px;
 }
@@ -1672,6 +2031,35 @@ h1 {
 
 .media-preview:hover .media-preview-mask {
   opacity: 1;
+}
+
+.media-cell {
+  display: flex;
+  align-items: center;
+}
+
+.media-cell .media-thumb {
+  width: 56px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: 6px;
+}
+
+.material-media {
+  width: 100px;
+  height: 100px;
+  object-fit: cover;
+  background: #f5f5f7;
+  border-radius: 6px;
+}
+
+.resource-url {
+  display: inline-block;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #7a7d8b;
+  white-space: nowrap;
 }
 
 @media (width <= 760px) {

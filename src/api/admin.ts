@@ -350,6 +350,73 @@ export const adminApi = {
       })
     );
   },
+  materials(
+    params: {
+      keyword?: string;
+      status?: string;
+      categoryCode?: string;
+      page?: number;
+      pageSize?: number;
+    } = {}
+  ) {
+    return unwrap(client.get("/admin/v1/materials", { params })) as Promise<
+      AdminPage | { items?: any[] } | any[]
+    >;
+  },
+  createMaterial(data: Record<string, any>) {
+    return unwrap(client.post("/admin/v1/materials", data));
+  },
+  updateMaterial(id: string, data: Record<string, any>) {
+    return unwrap(
+      client.put(`/admin/v1/materials/${encodeURIComponent(id)}`, data)
+    );
+  },
+  materialDetail(id: string) {
+    return unwrap(client.get(`/admin/v1/materials/${encodeURIComponent(id)}`));
+  },
+  deleteMaterial(id: string) {
+    return unwrap(
+      client.delete(`/admin/v1/materials/${encodeURIComponent(id)}`)
+    );
+  },
+  updateMaterialStatus(id: string, status: string) {
+    return unwrap(
+      client.put(`/admin/v1/materials/${encodeURIComponent(id)}/status`, {
+        status
+      })
+    );
+  },
+  materialCategoryTree(params: { status?: string } = {}) {
+    return unwrap(
+      client.get("/admin/v1/material-categories/tree", { params })
+    ) as Promise<{ items?: any[] } | any[]>;
+  },
+  createMaterialCategory(data: Record<string, any>) {
+    return unwrap(client.post("/admin/v1/material-categories", data));
+  },
+  updateMaterialCategory(categoryId: string, data: Record<string, any>) {
+    return unwrap(
+      client.put(
+        `/admin/v1/material-categories/${encodeURIComponent(categoryId)}`,
+        data
+      )
+    );
+  },
+  deleteMaterialCategory(categoryId: string) {
+    return unwrap(
+      client.delete(
+        `/admin/v1/material-categories/${encodeURIComponent(categoryId)}`
+      )
+    );
+  },
+  updateMaterialCategoryStatus(categoryId: string, status: string) {
+    return unwrap(
+      client.put(
+        `/admin/v1/material-categories/${encodeURIComponent(categoryId)}/status`,
+        { status }
+      )
+    );
+  },
   categories(
     params: {
       keyword?: string;

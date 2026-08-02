@@ -11,6 +11,8 @@ export interface ResourceField {
   accept?: string;
   /** 仅在新增时展示，编辑时隐藏（如模型编码） */
   createOnly?: boolean;
+  /** 暂时隐藏，不在表单中展示 */
+  hidden?: boolean;
 }
 
 export interface ResourceConfig {
@@ -28,7 +30,11 @@ export interface ResourceConfig {
     | "models"
     | "prompts"
     | "inspirations"
-    | "categories";
+    | "categories"
+    | "materials"
+    | "materialCategories";
+  /** 分类资源的 scope，用于素材等业务隔离 */
+  categoryScope?: "INSPIRATION" | "MATERIAL";
   allowCreate?: boolean;
   allowDelete?: boolean;
   allowStatus?: boolean;
@@ -44,6 +50,8 @@ export interface ResourceConfig {
   searchPlaceholder?: string;
   /** 使用接口参数进行服务端筛选 */
   serverFilters?: boolean;
+  /** 使用服务端分页（按 page/pageSize 请求） */
+  serverPagination?: boolean;
   fields: ResourceField[];
   columns: Array<{
     key: string;
@@ -390,6 +398,7 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
     icon: "ri:lightbulb-flash-line",
     color: "#e84393",
     apiResource: "inspirations",
+    categoryScope: "INSPIRATION",
     allowDelete: false,
     createText: "发布灵感",
     searchable: ["title", "category", "author"],
@@ -454,20 +463,16 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
     color: "#00cec9",
     apiResource: "categories",
     treeMode: true,
+    serverFilters: true,
+    serverPagination: true,
     createText: "新增分类",
     allowDelete: true,
     allowStatus: true,
-    searchable: ["categoryName", "categoryCode"],
+    searchable: ["categoryName"],
     fields: [
       { key: "categoryName", label: "分类名称", required: true },
       {
-        key: "categoryCode",
-        label: "分类编码",
-        required: true,
-        createOnly: true
-      },
-      {
-        key: "parentCode",
+        key: "parentId",
         label: "父级分类",
         type: "select",
         optionsFrom: "topLevelCategories"
@@ -476,7 +481,6 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
     ],
     columns: [
       { key: "categoryName", label: "分类名称" },
-      { key: "categoryCode", label: "分类编码" },
       { key: "level", label: "类目等级", width: 110 },
       { key: "contentCount", label: "内容数" },
       { key: "sortNo", label: "排序" },
@@ -677,6 +681,167 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
         scenario: "VIDEO",
         content: "根据脚本拆解镜头、景别、运动与时长",
         updatedAt: "2026-06-17 15:12",
+        status: status()
+      }
+    ]
+  },
+  materials: {
+    title: "素材列表",
+    description: "运营前台素材瀑布流内容、作者数据与排序",
+    icon: "ri:folder-image-line",
+    color: "#6c5ce7",
+    apiResource: "materials",
+    serverFilters: true,
+    allowDelete: true,
+    allowStatus: true,
+    createText: "发布素材",
+    searchable: ["title", "categoryCode", "type"],
+    fields: [
+      { key: "title", label: "标题", required: true },
+      {
+        key: "type",
+        label: "资源类型",
+        type: "select",
+        options: ["IMAGE", "VIDEO", "TEXT"],
+        required: true
+      },
+      {
+        key: "categoryCode",
+        label: "分类",
+        type: "select",
+        optionsFrom: "categoryList"
+      },
+      {
+        key: "resourceUrl",
+        label: "资源文件",
+        type: "upload",
+        accept: "image/*,video/*"
+      },
+      {
+        key: "coverUrl",
+        label: "封面",
+        type: "upload",
+        accept: "image/*",
+        hidden: true
+      },
+      { key: "sortNo", label: "排序", type: "number" }
+    ],
+    columns: [
+      { key: "title", label: "素材内容" },
+      { key: "type", label: "类型", width: 90 },
+      { key: "categoryCode", label: "分类" },
+      { key: "resourceUrl", label: "资源地址", width: 120 },
+      { key: "sortNo", label: "排序", width: 80 },
+      { key: "updatedAt", label: "更新时间" },
+      { key: "status", label: "状态", width: 100 }
+    ],
+    records: [
+      {
+        id: "M-01",
+        title: "电商主图素材",
+        type: "IMAGE",
+        categoryCode: "ECOMMERCE",
+        resourceUrl: "https://picsum.photos/seed/daone-material-1/320/200",
+        coverUrl: "https://picsum.photos/seed/daone-material-1/320/200",
+        sortNo: 10,
+        updatedAt: "2026-06-18 10:20",
+        status: status()
+      },
+      {
+        id: "M-02",
+        title: "社交媒体封面",
+        type: "IMAGE",
+        categoryCode: "SOCIAL",
+        resourceUrl: "https://picsum.photos/seed/daone-material-2/320/200",
+        coverUrl: "https://picsum.photos/seed/daone-material-2/320/200",
+        sortNo: 20,
+        updatedAt: "2026-06-17 16:40",
+        status: status()
+      },
+      {
+        id: "M-03",
+        title: "品牌宣传视频",
+        type: "VIDEO",
+        categoryCode: "VIDEO",
+        resourceUrl: "https://picsum.photos/seed/daone-material-3/320/200",
+        coverUrl: "https://picsum.photos/seed/daone-material-3/320/200",
+        sortNo: 30,
+        updatedAt: "2026-06-16 09:25",
+        status: status()
+      }
+    ]
+  },
+  materialCategories: {
+    title: "素材分类",
+    description: "管理素材内容的分类层级",
+    icon: "ri:folder-3-line",
+    color: "#a29bfe",
+    apiResource: "materialCategories",
+    treeMode: true,
+    createText: "新增分类",
+    allowDelete: true,
+    allowStatus: true,
+    searchable: ["categoryName"],
+    fields: [
+      { key: "categoryName", label: "分类名称", required: true },
+      {
+        key: "parentId",
+        label: "父级分类",
+        type: "select",
+        optionsFrom: "topLevelCategories"
+      },
+      { key: "sortNo", label: "排序", type: "number" }
+    ],
+    columns: [
+      { key: "categoryName", label: "分类名称" },
+      { key: "level", label: "类目等级", width: 110 },
+      { key: "sortNo", label: "排序" },
+      { key: "status", label: "状态", width: 100 }
+    ],
+    records: [
+      {
+        id: "20101",
+        categoryName: "电商素材",
+        categoryCode: "ECOMMERCE",
+        parentId: "",
+        contentCount: 86,
+        sortNo: 10,
+        status: status()
+      },
+      {
+        id: "20102",
+        categoryName: "社交媒体",
+        categoryCode: "SOCIAL",
+        parentId: "",
+        contentCount: 64,
+        sortNo: 20,
+        status: status()
+      },
+      {
+        id: "20103",
+        categoryName: "视频素材",
+        categoryCode: "VIDEO",
+        parentId: "",
+        contentCount: 42,
+        sortNo: 30,
+        status: status()
+      },
+      {
+        id: "20111",
+        categoryName: "主图模板",
+        categoryCode: "ECOMMERCE_MAIN",
+        parentId: "20101",
+        contentCount: 35,
+        sortNo: 10,
+        status: status()
+      },
+      {
+        id: "20112",
+        categoryName: "详情页素材",
+        categoryCode: "ECOMMERCE_DETAIL",
+        parentId: "20101",
+        contentCount: 28,
+        sortNo: 20,
         status: status()
       }
     ]

@@ -111,6 +111,27 @@ export default [
     ]
   },
   {
+    path: "/materials",
+    name: "Materials",
+    component: Layout,
+    redirect: "/materials/list",
+    meta: { title: "素材管理", icon: "ri:folder-image-line", rank: 7 },
+    children: [
+      {
+        path: "/materials/list",
+        name: "MaterialList",
+        component: ResourcePage,
+        meta: { title: "素材列表", resource: "materials" } as any
+      },
+      {
+        path: "/materials/categories",
+        name: "MaterialCategoryList",
+        component: ResourcePage,
+        meta: { title: "素材分类", resource: "materialCategories" } as any
+      }
+    ]
+  },
+  {
     path: "/finance",
     name: "Finance",
     component: Layout,
