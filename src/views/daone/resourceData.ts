@@ -52,6 +52,10 @@ export interface ResourceConfig {
   serverFilters?: boolean;
   /** 使用服务端分页（按 page/pageSize 请求） */
   serverPagination?: boolean;
+  /** 服务端分页默认每页条数 */
+  defaultPageSize?: number;
+  /** 固定分页大小，隐藏每页条数切换 */
+  fixedPageSize?: boolean;
   fields: ResourceField[];
   columns: Array<{
     key: string;
@@ -148,56 +152,66 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
     allowCreate: false,
     allowDelete: false,
     allowStatus: true,
-    searchable: ["nickname", "phone", "email", "id"],
+    searchable: ["nickname", "phone", "companyName", "id"],
     fields: [],
     columns: [
       { key: "nickname", label: "用户昵称" },
       { key: "phone", label: "手机号" },
-      { key: "email", label: "邮箱" },
+      { key: "companyName", label: "公司名称/品牌名称" },
+      { key: "position", label: "岗位" },
       { key: "role", label: "角色", width: 100 },
       { key: "createdAt", label: "注册时间" },
-      { key: "status", label: "状态", width: 100 }
+      { key: "lastUsedAt", label: "最近使用时间" },
+      { key: "memberStatus", label: "状态", width: 100 }
     ],
     records: [
       {
         id: "U-33456",
         nickname: "李阳",
         phone: "18958012675",
-        email: "liyang@example.com",
+        companyName: "阳和设计工作室",
+        position: "品牌运营",
         role: "USER",
         points: 12003,
         createdAt: "2026-05-12",
-        status: status()
+        lastUsedAt: "2026-06-18 10:20",
+        memberStatus: "会员"
       },
       {
         id: "U-33455",
         nickname: "林一设计",
         phone: "13788918891",
-        email: "linyi@example.com",
+        companyName: "林一视觉",
+        position: "设计师",
         role: "USER",
         points: 28660,
         createdAt: "2026-05-10",
-        status: status()
+        lastUsedAt: "2026-06-17 16:40",
+        memberStatus: "会员"
       },
       {
         id: "U-33454",
         nickname: "BrandLab",
         phone: "18630213021",
-        email: "hello@brandlab.cn",
+        companyName: "BrandLab",
+        position: "市场总监",
         role: "USER",
         points: 98600,
         createdAt: "2026-04-28",
-        status: status()
+        lastUsedAt: "2026-06-16 09:25",
+        memberStatus: "非会员"
       },
       {
         id: "U-33453",
         nickname: "运营管理员",
         phone: "18958012675",
-        email: null,
+        companyName: "",
+        position: "管理员",
         role: "ADMIN",
         points: 120,
         createdAt: "2026-06-16",
-        status: status(false)
+        lastUsedAt: "2026-06-18 11:26",
+        memberStatus: "非会员"
       }
     ]
   },
@@ -398,12 +412,11 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
     icon: "ri:lightbulb-flash-line",
     color: "#e84393",
     apiResource: "inspirations",
-    categoryScope: "INSPIRATION",
     allowDelete: false,
     createText: "发布灵感",
     searchable: ["title", "category", "author"],
     fields: [
-      { key: "title", label: "标题", required: true },
+      // { key: "title", label: "标题", required: true },
       {
         key: "categoryCode",
         label: "分类",
@@ -465,6 +478,8 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
     treeMode: true,
     serverFilters: true,
     serverPagination: true,
+    defaultPageSize: 1000,
+    fixedPageSize: true,
     createText: "新增分类",
     allowDelete: true,
     allowStatus: true,
@@ -697,7 +712,7 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
     createText: "发布素材",
     searchable: ["title", "categoryCode", "type"],
     fields: [
-      { key: "title", label: "标题", required: true },
+      // { key: "title", label: "标题", required: true },
       {
         key: "type",
         label: "资源类型",
@@ -709,7 +724,8 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
         key: "categoryCode",
         label: "分类",
         type: "select",
-        optionsFrom: "categoryList"
+        optionsFrom: "categoryList",
+        required: true
       },
       {
         key: "resourceUrl",

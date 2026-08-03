@@ -106,7 +106,11 @@ export default [
         path: "/content/prompts",
         name: "PromptTemplateList",
         component: ResourcePage,
-        meta: { title: "提示词模板", resource: "prompts" } as any
+        meta: {
+          title: "提示词模板",
+          resource: "prompts",
+          showLink: false
+        } as any
       }
     ]
   },

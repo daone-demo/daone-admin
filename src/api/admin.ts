@@ -159,7 +159,16 @@ export const adminApi = {
       })
     ) as Promise<AdminPage>;
   },
-  users(params: { page?: number; pageSize?: number } = {}) {
+  users(
+    params: {
+      page?: number;
+      pageSize?: number;
+      keyword?: string;
+      status?: string;
+      startDate?: string;
+      endDate?: string;
+    } = {}
+  ) {
     return unwrap(
       client.get("/admin/v1/users", { params })
     ) as Promise<AdminPage>;
@@ -189,6 +198,16 @@ export const adminApi = {
   },
   userDetail(userId: string) {
     return unwrap(client.get(`/admin/v1/users/${encodeURIComponent(userId)}`));
+  },
+  userProjects(
+    userId: string,
+    params: { page?: number; pageSize?: number } = {}
+  ) {
+    return unwrap(
+      client.get(`/admin/v1/users/${encodeURIComponent(userId)}/projects`, {
+        params
+      })
+    ) as Promise<AdminPage<{ id: number; title: string; updatedAt?: string }>>;
   },
   orders(
     params: {
@@ -268,8 +287,13 @@ export const adminApi = {
       )
     );
   },
-  models() {
-    return unwrap(client.get("/admin/v1/model-configs")) as Promise<
+  models(
+    params: {
+      startDate?: string;
+      endDate?: string;
+    } = {}
+  ) {
+    return unwrap(client.get("/admin/v1/model-configs", { params })) as Promise<
       { items?: any[] } | any[]
     >;
   },

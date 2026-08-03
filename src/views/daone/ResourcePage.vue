@@ -203,21 +203,32 @@ const statusFilter = ref("");
 const categoryFilter = ref("");
 const payTypeFilter = ref("");
 const orderDateRange = ref<[string, string] | null>(null);
+const userDateRange = ref<[string, string] | null>(null);
+const modelDateRange = ref<[string, string] | null>(null);
 const dialogVisible = ref(false);
 const detailVisible = ref(false);
+const userProjects = ref<
+  Array<{ id: number | string; title: string; updatedAt?: string }>
+>([]);
+const userProjectsLoading = ref(false);
+const userProjectsPage = ref(1);
+const userProjectsPageSize = 10;
+const userProjectsTotal = ref(0);
 const pointsVisible = ref(false);
 const editingId = ref("");
 const current = ref<Record<string, any>>({});
 const form = reactive<Record<string, any>>({});
 const records = ref<Array<Record<string, any>>>([]);
 const categoryOptions = ref<Array<{ label: string; value: string }>>([]);
+const parentCategoryRecords = ref<Array<Record<string, any>>>([]);
 const categoryOptionsLoading = ref(false);
 const loading = ref(false);
 const apiError = ref("");
 const remoteTotal = ref(0);
 const currentPage = ref(1);
-const pageSize = ref(10);
-const PAGE_SIZES = [10, 20, 50, 100];
+const getDefaultPageSize = () => config.value?.defaultPageSize ?? 10;
+const pageSize = ref(getDefaultPageSize());
+const PAGE_SIZES = [10, 20, 50, 100, 1000];
 
 const hasAdminToken = () => Boolean(getToken()?.accessToken);
 const shouldUseApi = () =>
@@ -288,6 +299,8 @@ const resetFilters = () => {
   categoryFilter.value = "";
   payTypeFilter.value = "";
   orderDateRange.value = null;
+  userDateRange.value = null;
+  modelDateRange.value = null;
   currentPage.value = 1;
 };
 
@@ -311,6 +324,20 @@ const buildOrderQueryParams = () => {
   if (payTypeFilter.value) params.payType = payTypeFilter.value;
   if (orderDateRange.value?.[0]) params.dateFrom = orderDateRange.value[0];
   if (orderDateRange.value?.[1]) params.dateTo = orderDateRange.value[1];
+  return params;
+};
+
+const buildUserQueryParams = () => {
+  const params: Record<string, string> = {};
+  if (userDateRange.value?.[0]) params.startDate = userDateRange.value[0];
+  if (userDateRange.value?.[1]) params.endDate = userDateRange.value[1];
+  return params;
+};
+
+const buildModelQueryParams = () => {
+  const params: Record<string, string> = {};
+  if (modelDateRange.value?.[0]) params.startDate = modelDateRange.value[0];
+  if (modelDateRange.value?.[1]) params.endDate = modelDateRange.value[1];
   return params;
 };
 
@@ -347,6 +374,41 @@ const statusFilterOptions = computed(() => {
 const normalizeList = (payload: any) =>
   Array.isArray(payload) ? payload : payload?.items || payload?.records || [];
 
+const normalizeCategoryRows = (items: any[]) => {
+  const normalizeStatus = (value: string) =>
+    value === "DISABLED" ? "停用" : value === "ENABLED" ? "启用" : value;
+
+  const rows = items.map(item => {
+    const parentIdRaw = item.parentId ?? "";
+    const parentId =
+      parentIdRaw === null || parentIdRaw === undefined || parentIdRaw === ""
+        ? ""
+        : String(parentIdRaw);
+    const level = Number(item.level ?? (parentId ? 2 : 1));
+    return {
+      ...item,
+      id: String(item.id || item.categoryCode || item.code),
+      categoryCode: String(item.categoryCode || item.code || item.id || ""),
+      categoryName: String(item.categoryName || item.name || ""),
+      parentId,
+      level,
+      status: normalizeStatus(item.status)
+    };
+  });
+  const codeToId = new Map(
+    rows.map(row => [String(row.categoryCode), String(row.id)])
+  );
+  return rows.map(row => {
+    if (row.parentId) return row;
+    const legacyParentCode = String(row.parentCode || "").trim();
+    if (!legacyParentCode) return row;
+    return {
+      ...row,
+      parentId: codeToId.get(legacyParentCode) || legacyParentCode
+    };
+  });
+};
+
 const fetchPaginatedResource = async (
   fetcher: (params: { page: number; pageSize: number }) => Promise<any>
 ) => {
@@ -377,7 +439,13 @@ const normalizeRemoteRows = (items: any[]) => {
     rows = items.map(item => ({
       ...item,
       id: String(item.id),
-      status: item.status === "ENABLED" ? "启用" : "停用"
+      status: item.status === "ENABLED" ? "启用" : "停用",
+      memberStatus:
+        item.memberStatus === "MEMBER"
+          ? "会员"
+          : item.memberStatus === "NON_MEMBER"
+            ? "非会员"
+            : "-"
     }));
   } else if (resourceKey.value === "orders") {
     rows = items.map(item => ({
@@ -458,35 +526,7 @@ const normalizeRemoteRows = (items: any[]) => {
       };
     });
   } else if (resourceKey.value === "categories") {
-    rows = items.map(item => {
-      const parentIdRaw = item.parentId ?? "";
-      const parentId =
-        parentIdRaw === null || parentIdRaw === undefined || parentIdRaw === ""
-          ? ""
-          : String(parentIdRaw);
-      const level = Number(item.level ?? (parentId ? 2 : 1));
-      return {
-        ...item,
-        id: String(item.id || item.categoryCode || item.code),
-        categoryCode: String(item.categoryCode || item.code || item.id || ""),
-        categoryName: String(item.categoryName || item.name || ""),
-        parentId,
-        level,
-        status: normalizeStatus(item.status)
-      };
-    });
-    const codeToId = new Map(
-      rows.map(row => [String(row.categoryCode), String(row.id)])
-    );
-    rows = rows.map(row => {
-      if (row.parentId) return row;
-      const legacyParentCode = String(row.parentCode || "").trim();
-      if (!legacyParentCode) return row;
-      return {
-        ...row,
-        parentId: codeToId.get(legacyParentCode) || legacyParentCode
-      };
-    });
+    rows = normalizeCategoryRows(items);
   } else {
     rows = items.map(item => ({
       ...item,
@@ -554,6 +594,30 @@ const loadCategoryOptions = async () => {
   }
 };
 
+const loadParentCategoryOptions = async () => {
+  if (resourceKey.value !== "categories") {
+    parentCategoryRecords.value = [];
+    return;
+  }
+
+  const fallbackItems = normalizeCategoryRows(
+    resourceConfigs.categories.records
+  );
+
+  if (!hasAdminToken()) {
+    parentCategoryRecords.value = fallbackItems;
+    return;
+  }
+
+  try {
+    const payload = await adminApi.categories({ page: 1, pageSize: 1000 });
+    const items = normalizeCategoryRows(normalizeList(payload));
+    parentCategoryRecords.value = items.length ? items : fallbackItems;
+  } catch {
+    parentCategoryRecords.value = fallbackItems;
+  }
+};
+
 const loadRemote = async (options: { resetFilters?: boolean } = {}) => {
   if (options.resetFilters) {
     resetFilters();
@@ -568,6 +632,9 @@ const loadRemote = async (options: { resetFilters?: boolean } = {}) => {
     if (isContentListResource.value) {
       await loadCategoryOptions();
     }
+    if (resourceKey.value === "categories") {
+      await loadParentCategoryOptions();
+    }
     return;
   }
   loading.value = true;
@@ -579,7 +646,9 @@ const loadRemote = async (options: { resetFilters?: boolean } = {}) => {
         adminApi.workflows(params)
       );
     } else if (apiResource === "users") {
-      items = await fetchPaginatedResource(params => adminApi.users(params));
+      items = await fetchPaginatedResource(params =>
+        adminApi.users({ ...buildUserQueryParams(), ...params })
+      );
     } else if (apiResource === "invoices") {
       items = await fetchPaginatedResource(params => adminApi.invoices(params));
     } else if (apiResource === "orders") {
@@ -591,7 +660,7 @@ const loadRemote = async (options: { resetFilters?: boolean } = {}) => {
     } else if (apiResource === "pointPackages") {
       items = normalizeList(await adminApi.pointPackages());
     } else if (apiResource === "models") {
-      items = normalizeList(await adminApi.models());
+      items = normalizeList(await adminApi.models(buildModelQueryParams()));
     } else if (apiResource === "prompts") {
       items = normalizeList(await adminApi.promptTemplates());
     } else if (apiResource === "inspirations") {
@@ -635,9 +704,13 @@ const loadRemote = async (options: { resetFilters?: boolean } = {}) => {
   if (isContentListResource.value) {
     await loadCategoryOptions();
   }
+  if (resourceKey.value === "categories") {
+    await loadParentCategoryOptions();
+  }
 };
 
 watch(resourceKey, () => {
+  pageSize.value = getDefaultPageSize();
   resetFilters();
   loadRemote();
 });
@@ -684,15 +757,19 @@ const isTreeMode = computed(
   () => Boolean(config.value?.treeMode) && isCategoryResource.value
 );
 
-const topLevelCategories = computed(() =>
-  records.value.filter(
+const topLevelCategories = computed(() => {
+  const source =
+    resourceKey.value === "categories"
+      ? parentCategoryRecords.value
+      : records.value;
+  return source.filter(
     item =>
       item.parentId === "" ||
       item.parentId === null ||
       item.parentId === undefined ||
       Number(item.level) === 1
-  )
-);
+  );
+});
 
 const parentCategoryOptions = computed(() => {
   const editingCategoryId = String(current.value?.id || editingId.value || "");
@@ -708,6 +785,12 @@ const paginationTotal = computed(() =>
   useServerPagination() ? remoteTotal.value : filteredRecords.value.length
 );
 
+const paginationLayout = computed(() =>
+  config.value?.fixedPageSize
+    ? "total, prev, pager, next, jumper"
+    : "total, sizes, prev, pager, next, jumper"
+);
+
 const paginatedRecords = computed(() => tableRecords.value);
 
 watch([keyword, statusFilter], () => {
@@ -717,6 +800,18 @@ watch([keyword, statusFilter], () => {
 
 watch([statusFilter, payTypeFilter, orderDateRange, categoryFilter], () => {
   if (!useServerFilters() && !useServerPagination()) return;
+  currentPage.value = 1;
+  loadRemote();
+});
+
+watch(userDateRange, () => {
+  if (resourceKey.value !== "users" || !shouldUseApi()) return;
+  currentPage.value = 1;
+  loadRemote();
+});
+
+watch(modelDateRange, () => {
+  if (resourceKey.value !== "models" || !shouldUseApi()) return;
   currentPage.value = 1;
   loadRemote();
 });
@@ -1076,10 +1171,54 @@ const toggleStatus = async (row: Record<string, any>) => {
   ElMessage.success(`已${row.status}`);
 };
 
-const openDetail = (row: Record<string, any>) => {
+const openDetail = async (row: Record<string, any>) => {
   current.value = row;
   detailVisible.value = true;
+  if (resourceKey.value === "users") {
+    userProjectsPage.value = 1;
+    await loadUserProjects();
+  }
 };
+
+const loadUserProjects = async () => {
+  if (!shouldUseApi() || resourceKey.value !== "users") {
+    userProjects.value = [];
+    userProjectsTotal.value = 0;
+    return;
+  }
+
+  const userId = String(current.value?.id || "");
+  if (!userId) return;
+
+  userProjectsLoading.value = true;
+  try {
+    const payload = await adminApi.userProjects(userId, {
+      page: userProjectsPage.value,
+      pageSize: userProjectsPageSize
+    });
+    userProjects.value = normalizeList(payload);
+    userProjectsTotal.value = Number(
+      payload?.total ?? userProjects.value.length
+    );
+  } catch {
+    userProjects.value = [];
+    userProjectsTotal.value = 0;
+  } finally {
+    userProjectsLoading.value = false;
+  }
+};
+
+watch(detailVisible, visible => {
+  if (visible) return;
+  userProjectsPage.value = 1;
+  userProjects.value = [];
+  userProjectsTotal.value = 0;
+});
+
+watch(userProjectsPage, () => {
+  if (!detailVisible.value || resourceKey.value !== "users") return;
+  loadUserProjects();
+});
 
 const openPoints = (row: Record<string, any>) => {
   current.value = row;
@@ -1108,6 +1247,8 @@ const adjustPoints = async () => {
 };
 
 const statusType = (value: string) => {
+  if (["会员", "MEMBER"].includes(value)) return "success";
+  if (["非会员", "NON_MEMBER"].includes(value)) return "info";
   if (["启用", "已支付", "已开票", "PAID", "ENABLED", "ISSUED"].includes(value))
     return "success";
   if (["待支付", "待开票", "PENDING", "PAYING", "PROCESSING"].includes(value))
@@ -1295,6 +1436,26 @@ const uploadFieldFile = async (field: ResourceField, file: File) => {
           value-format="YYYY-MM-DD"
           class="date-filter"
         />
+        <el-date-picker
+          v-if="resourceKey === 'users'"
+          v-model="userDateRange"
+          type="daterange"
+          range-separator="至"
+          start-placeholder="注册开始日期"
+          end-placeholder="注册结束日期"
+          value-format="YYYY-MM-DD"
+          class="date-filter"
+        />
+        <el-date-picker
+          v-if="resourceKey === 'models'"
+          v-model="modelDateRange"
+          type="daterange"
+          range-separator="至"
+          start-placeholder="开始日期"
+          end-placeholder="结束日期"
+          value-format="YYYY-MM-DD"
+          class="date-filter"
+        />
         <el-button @click="loadRemote({ resetFilters: true })">
           <IconifyIconOnline icon="ri:refresh-line" />
           重置
@@ -1360,7 +1521,9 @@ const uploadFieldFile = async (field: ResourceField, file: File) => {
               </div>
             </div>
             <el-tag
-              v-else-if="column.key === 'status'"
+              v-else-if="
+                column.key === 'status' || column.key === 'memberStatus'
+              "
               round
               effect="light"
               :type="statusType(row[column.key])"
@@ -1511,9 +1674,9 @@ const uploadFieldFile = async (field: ResourceField, file: File) => {
           v-model:current-page="currentPage"
           v-model:page-size="pageSize"
           :page-sizes="PAGE_SIZES"
+          :layout="paginationLayout"
           :total="paginationTotal"
           background
-          layout="total, sizes, prev, pager, next, jumper"
         />
       </div>
       <div v-else class="table-pagination tree-record-count">
@@ -1654,14 +1817,32 @@ const uploadFieldFile = async (field: ResourceField, file: File) => {
       </el-descriptions>
       <div v-if="resourceKey === 'users'" class="detail-section">
         <h4>最近项目</h4>
-        <div
-          v-for="name in ['品牌春季上新', '电商主图批量设计', '产品发布会海报']"
-          :key="name"
-          class="project-row"
-        >
-          <IconifyIconOnline icon="ri:folder-5-line" />
-          <span>{{ name }}</span>
-          <small>最近编辑</small>
+        <div v-loading="userProjectsLoading" class="project-list">
+          <el-empty
+            v-if="!userProjectsLoading && !userProjects.length"
+            description="暂无项目"
+          />
+          <div
+            v-for="project in userProjects"
+            :key="project.id"
+            class="project-row"
+          >
+            <IconifyIconOnline icon="ri:folder-5-line" />
+            <span>{{ project.title }}</span>
+            <small>{{
+              project.updatedAt ? formatDateTime(project.updatedAt) : "最近编辑"
+            }}</small>
+          </div>
+          <el-pagination
+            v-if="userProjectsTotal > userProjectsPageSize"
+            v-model:current-page="userProjectsPage"
+            :page-size="userProjectsPageSize"
+            :total="userProjectsTotal"
+            layout="prev, pager, next"
+            small
+            background
+            class="project-pagination"
+          />
         </div>
       </div>
     </el-drawer>
@@ -1960,6 +2141,15 @@ h1 {
 .project-row small {
   margin-left: auto;
   color: #a0a2aa;
+}
+
+.project-list {
+  min-height: 80px;
+}
+
+.project-pagination {
+  justify-content: center;
+  margin-top: 12px;
 }
 
 .points-form {
