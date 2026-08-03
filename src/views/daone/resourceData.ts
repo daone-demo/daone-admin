@@ -743,9 +743,9 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
       { key: "sortNo", label: "排序", type: "number" }
     ],
     columns: [
-      { key: "title", label: "素材内容" },
+      // { key: "title", label: "素材内容" },
       { key: "type", label: "类型", width: 90 },
-      { key: "categoryCode", label: "分类" },
+      { key: "categoryName", label: "分类" },
       { key: "resourceUrl", label: "资源地址", width: 120 },
       { key: "sortNo", label: "排序", width: 80 },
       { key: "updatedAt", label: "更新时间" },
