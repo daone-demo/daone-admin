@@ -374,11 +374,16 @@ export const adminApi = {
       })
     );
   },
+  deleteInspiration(id: string) {
+    return unwrap(
+      client.delete(`/admin/v1/inspirations/${encodeURIComponent(id)}`)
+    );
+  },
   materials(
     params: {
       keyword?: string;
       status?: string;
-      categoryCode?: string;
+      categoryId?: string;
       page?: number;
       pageSize?: number;
     } = {}
@@ -541,11 +546,20 @@ export const adminApi = {
       )
     );
   },
-  uploadFile(file: File) {
+  uploadFile(file: File, onProgress?: (percent: number) => void) {
     const formData = new FormData();
     formData.append("file", file);
     return unwrap(
-      client.post("/admin/v1/files/upload", formData, { timeout: 120000 })
+      client.post("/admin/v1/files/upload", formData, {
+        timeout: 300000,
+        onUploadProgress: event => {
+          if (!onProgress) return;
+          const total = event.total || file.size;
+          if (!total) return;
+          const percent = Math.round((event.loaded / total) * 100);
+          onProgress(Math.min(percent, 99));
+        }
+      })
     ) as Promise<{
       fileName: string;
       url: string;

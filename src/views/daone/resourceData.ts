@@ -412,7 +412,7 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
     icon: "ri:lightbulb-flash-line",
     color: "#e84393",
     apiResource: "inspirations",
-    allowDelete: false,
+    allowDelete: true,
     createText: "发布灵感",
     searchable: ["title", "category", "author"],
     fields: [
@@ -717,7 +717,7 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
         key: "type",
         label: "资源类型",
         type: "select",
-        options: ["IMAGE", "VIDEO", "TEXT"],
+        options: ["IMAGE", "VIDEO"],
         required: true
       },
       {

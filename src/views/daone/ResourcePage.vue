@@ -103,7 +103,10 @@ const flattenMaterialCategoryTree = (
   return result;
 };
 
-const buildCategorySelectOptions = (items: Array<Record<string, any>>) => {
+const buildCategorySelectOptions = (
+  items: Array<Record<string, any>>,
+  valueKey: "id" | "categoryCode" = "categoryCode"
+) => {
   const idToName = new Map(
     items.map(item => [
       String(item.id || item.categoryCode),
@@ -124,9 +127,13 @@ const buildCategorySelectOptions = (items: Array<Record<string, any>>) => {
       const label = parentName
         ? `${parentName} / ${item.categoryName}`
         : String(item.categoryName);
+      const value =
+        valueKey === "id"
+          ? String(item.id || item.categoryCode)
+          : String(item.categoryCode || item.id);
       return {
         label,
-        value: String(item.categoryCode || item.id)
+        value
       };
     });
 };
@@ -346,7 +353,7 @@ const buildMaterialQueryParams = () => {
   const word = keyword.value.trim();
   if (word) params.keyword = word;
   if (statusFilter.value) params.status = statusFilter.value;
-  if (categoryFilter.value) params.categoryCode = categoryFilter.value;
+  if (categoryFilter.value) params.categoryId = categoryFilter.value;
   return params;
 };
 
@@ -558,7 +565,12 @@ const loadCategoryOptions = async () => {
         );
 
   if (!hasAdminToken()) {
-    categoryOptions.value = buildCategorySelectOptions(fallbackItems);
+    categoryOptions.value = buildCategorySelectOptions(
+      fallbackItems,
+      ["materials", "inspirations"].includes(resourceKey.value)
+        ? "id"
+        : "categoryCode"
+    );
     return;
   }
 
@@ -567,6 +579,9 @@ const loadCategoryOptions = async () => {
     let items: Array<Record<string, any>> = [];
     if (resourceKey.value === "materials") {
       items = await loadMaterialCategoryItems();
+    } else if (resourceKey.value === "inspirations") {
+      const payload = await adminApi.categories({ page: 1, pageSize: 100 });
+      items = normalizeList(payload);
     } else {
       const scope = config.value?.categoryScope;
       items = await fetchPaginatedResource(params =>
@@ -585,13 +600,26 @@ const loadCategoryOptions = async () => {
               isRelevantCategoryScope(item, config.value?.categoryScope)
           );
     categoryOptions.value = buildCategorySelectOptions(
-      normalized.length ? normalized : fallbackItems
+      normalized.length ? normalized : fallbackItems,
+      ["materials", "inspirations"].includes(resourceKey.value)
+        ? "id"
+        : "categoryCode"
     );
   } catch {
-    categoryOptions.value = buildCategorySelectOptions(fallbackItems);
+    categoryOptions.value = buildCategorySelectOptions(
+      fallbackItems,
+      ["materials", "inspirations"].includes(resourceKey.value)
+        ? "id"
+        : "categoryCode"
+    );
   } finally {
     categoryOptionsLoading.value = false;
   }
+};
+
+const preloadContentListOptions = () => {
+  if (!isContentListResource.value) return;
+  return loadCategoryOptions();
 };
 
 const loadParentCategoryOptions = async () => {
@@ -628,9 +656,6 @@ const loadRemote = async (options: { resetFilters?: boolean } = {}) => {
       config.value?.records.map(item => formatRecordDates({ ...item })) || [];
     if (options.resetFilters) {
       resetFilters();
-    }
-    if (isContentListResource.value) {
-      await loadCategoryOptions();
     }
     if (resourceKey.value === "categories") {
       await loadParentCategoryOptions();
@@ -701,9 +726,6 @@ const loadRemote = async (options: { resetFilters?: boolean } = {}) => {
   } finally {
     loading.value = false;
   }
-  if (isContentListResource.value) {
-    await loadCategoryOptions();
-  }
   if (resourceKey.value === "categories") {
     await loadParentCategoryOptions();
   }
@@ -712,6 +734,7 @@ const loadRemote = async (options: { resetFilters?: boolean } = {}) => {
 watch(resourceKey, () => {
   pageSize.value = getDefaultPageSize();
   resetFilters();
+  void preloadContentListOptions();
   loadRemote();
 });
 
@@ -831,6 +854,7 @@ watchDebounced(
   { debounce: 400 }
 );
 
+void preloadContentListOptions();
 loadRemote();
 
 const statuses = computed(() => [
@@ -861,8 +885,29 @@ const openEditor = async (row?: Record<string, any>) => {
   config.value.fields.forEach(field => {
     form[field.key] = row?.[field.key] ?? (field.type === "number" ? 0 : "");
   });
-  if (isContentListResource.value) {
-    await loadCategoryOptions();
+  resetInspirationMedia();
+  resetMaterialMedia();
+  if (resourceKey.value === "inspirations" && row?.coverUrl) {
+    inspirationMediaItems.value = [
+      {
+        uid: `existing-${row.id}`,
+        name: "当前封面",
+        url: String(row.coverUrl),
+        status: "success",
+        progress: 100
+      }
+    ];
+  }
+  if (resourceKey.value === "materials" && row?.resourceUrl) {
+    materialMediaItems.value = [
+      {
+        uid: `existing-${row.id}`,
+        name: "当前资源",
+        url: String(row.resourceUrl),
+        status: "success",
+        progress: 100
+      }
+    ];
   }
   dialogVisible.value = true;
 };
@@ -995,11 +1040,17 @@ const toApiPayload = () => {
     };
   }
   if (resourceKey.value === "materials") {
+    const mediaUrls = getMaterialMediaUrls();
+    const resourceUrls = mediaUrls.length
+      ? mediaUrls
+      : form.resourceUrl
+        ? [String(form.resourceUrl)]
+        : [];
     return {
       title: form.title,
       type: form.type || "IMAGE",
-      categoryCode: form.categoryCode,
-      resourceUrl: form.resourceUrl,
+      categoryId: form.categoryCode,
+      resourceUrls,
       coverUrl: form.coverUrl,
       sortNo: Number(form.sortNo || 0),
       ...(!editingId.value ? { status: "ENABLED" } : {})
@@ -1008,7 +1059,7 @@ const toApiPayload = () => {
   if (resourceKey.value === "inspirations") {
     return {
       title: form.title,
-      categoryCode: form.categoryCode,
+      categoryId: form.categoryCode,
       coverUrl: form.coverUrl,
       prompt: form.prompt
     };
@@ -1017,11 +1068,34 @@ const toApiPayload = () => {
 };
 
 const save = async () => {
+  if (
+    (resourceKey.value === "inspirations" && inspirationBatchUploading.value) ||
+    (resourceKey.value === "materials" && materialBatchUploading.value)
+  ) {
+    ElMessage.warning("媒体上传中，请稍候");
+    return;
+  }
   const missing = editorFields.value.find(
     field => field.required && !String(form[field.key] ?? "").trim()
   );
   if (missing) {
     ElMessage.warning(`请填写${missing.label}`);
+    return;
+  }
+  if (
+    resourceKey.value === "inspirations" &&
+    !editingId.value &&
+    !getInspirationMediaUrls().length
+  ) {
+    ElMessage.warning("请上传媒体资源");
+    return;
+  }
+  if (
+    resourceKey.value === "materials" &&
+    !editingId.value &&
+    !getMaterialMediaUrls().length
+  ) {
+    ElMessage.warning("请上传资源文件");
     return;
   }
   if (config.value.apiResource && shouldUseApi()) {
@@ -1054,14 +1128,89 @@ const save = async () => {
           : await adminApi.createPromptTemplate(payload);
       }
       if (resourceKey.value === "inspirations") {
-        editingId.value
-          ? await adminApi.updateInspiration(editingId.value, payload)
-          : await adminApi.createInspiration(payload);
+        const mediaUrls = getInspirationMediaUrls();
+        const createdCount = !editingId.value ? mediaUrls.length : 0;
+        const basePayload = {
+          title: form.title,
+          categoryId: form.categoryCode,
+          prompt: form.prompt
+        };
+        if (editingId.value) {
+          const coverUrls = mediaUrls.length
+            ? mediaUrls
+            : form.coverUrl
+              ? [String(form.coverUrl)]
+              : [];
+          await adminApi.updateInspiration(editingId.value, {
+            ...basePayload,
+            coverUrl: coverUrls
+          });
+        } else {
+          const coverUrls = mediaUrls.length
+            ? mediaUrls
+            : form.coverUrl
+              ? [String(form.coverUrl)]
+              : [];
+          await adminApi.createInspiration({
+            ...basePayload,
+            coverUrl: coverUrls
+          });
+        }
+        await loadRemote();
+        dialogVisible.value = false;
+        if (createdCount > 1) {
+          ElMessage.success(`成功发布 ${createdCount} 条灵感`);
+        } else {
+          ElMessage.success(editingId.value ? "接口保存成功" : "接口创建成功");
+        }
+        return;
       }
       if (resourceKey.value === "materials") {
-        editingId.value
-          ? await adminApi.updateMaterial(editingId.value, payload)
-          : await adminApi.createMaterial(payload);
+        const mediaUrls = getMaterialMediaUrls();
+        const createdCount = !editingId.value ? mediaUrls.length : 0;
+        const basePayload = {
+          title: form.title,
+          type: form.type || "IMAGE",
+          categoryId: form.categoryCode,
+          sortNo: Number(form.sortNo || 0),
+          status: "ENABLED"
+        };
+        if (editingId.value) {
+          const resourceUrls = mediaUrls.length
+            ? mediaUrls
+            : form.resourceUrl
+              ? [String(form.resourceUrl)]
+              : [];
+          await adminApi.updateMaterial(editingId.value, {
+            ...basePayload,
+            resourceUrls,
+            coverUrl:
+              form.coverUrl ||
+              (form.type === "IMAGE" ? resourceUrls[0] : form.coverUrl)
+          });
+        } else {
+          const resourceUrls = mediaUrls.length
+            ? mediaUrls
+            : form.resourceUrl
+              ? [String(form.resourceUrl)]
+              : [];
+          const createPayload: Record<string, any> = {
+            ...basePayload,
+            resourceUrls
+          };
+          if (resourceUrls.length === 1 && form.type === "IMAGE") {
+            createPayload.coverUrl = form.coverUrl || resourceUrls[0];
+          }
+          await adminApi.createMaterial(createPayload);
+        }
+        await loadRemote();
+        dialogVisible.value = false;
+        if (createdCount > 1) {
+          ElMessage.success(`成功发布 ${createdCount} 条素材`);
+        } else {
+          ElMessage.success(editingId.value ? "接口保存成功" : "接口创建成功");
+        }
+        return;
       }
       if (resourceKey.value === "materialCategories") {
         editingId.value
@@ -1117,6 +1266,8 @@ const remove = async (row: Record<string, any>) => {
     try {
       if (resourceKey.value === "workflows")
         await adminApi.deleteWorkflow(String(row.id));
+      if (resourceKey.value === "inspirations")
+        await adminApi.deleteInspiration(String(row.id));
       if (resourceKey.value === "materials")
         await adminApi.deleteMaterial(String(row.id));
       if (resourceKey.value === "materialCategories")
@@ -1279,6 +1430,345 @@ const categoryLabelMap = computed(() =>
 
 const uploadFieldLoading = ref<Record<string, boolean>>({});
 
+interface BatchMediaItem {
+  uid: string;
+  name: string;
+  url: string;
+  status: "pending" | "uploading" | "success" | "error";
+  progress: number;
+  error?: string;
+}
+
+const inspirationMediaItems = ref<BatchMediaItem[]>([]);
+const inspirationBatchUploading = ref(false);
+const materialMediaItems = ref<BatchMediaItem[]>([]);
+const materialBatchUploading = ref(false);
+
+const isInspirationBatchUploadField = (field: ResourceField) =>
+  resourceKey.value === "inspirations" && field.key === "coverUrl";
+
+const isMaterialBatchUploadField = (field: ResourceField) =>
+  resourceKey.value === "materials" &&
+  field.key === "resourceUrl" &&
+  ["IMAGE", "VIDEO"].includes(String(form.type || ""));
+
+const isMaterialUploadField = (field: ResourceField) =>
+  resourceKey.value === "materials" && field.key === "resourceUrl";
+
+const isMaterialUploadDisabled = computed(
+  () => resourceKey.value === "materials" && !String(form.type || "").trim()
+);
+
+const isBatchUploadField = (field: ResourceField) =>
+  isInspirationBatchUploadField(field) || isMaterialBatchUploadField(field);
+
+const getBatchMediaItemsRef = (field: ResourceField) =>
+  isMaterialBatchUploadField(field)
+    ? materialMediaItems
+    : inspirationMediaItems;
+
+const getBatchUploadingRef = (field: ResourceField) =>
+  isMaterialBatchUploadField(field)
+    ? materialBatchUploading
+    : inspirationBatchUploading;
+
+const matchesMaterialType = (file: File, type: string) => {
+  if (type === "IMAGE") {
+    return (
+      file.type.startsWith("image/") ||
+      /\.(jpe?g|png|gif|webp|bmp|svg)$/i.test(file.name)
+    );
+  }
+  if (type === "VIDEO") {
+    return (
+      file.type.startsWith("video/") ||
+      /\.(mp4|webm|ogg|mov|m4v|avi)$/i.test(file.name)
+    );
+  }
+  return isMediaFile(file);
+};
+
+const isMediaFile = (file: File) =>
+  file.type.startsWith("image/") ||
+  file.type.startsWith("video/") ||
+  /\.(jpe?g|png|gif|webp|bmp|svg|mp4|webm|ogg|mov|m4v|avi)$/i.test(file.name);
+
+const readDirectoryEntries = (reader: FileSystemDirectoryReader) =>
+  new Promise<FileSystemEntry[]>((resolve, reject) => {
+    reader.readEntries(resolve, reject);
+  });
+
+const entryToFile = (entry: FileSystemFileEntry) =>
+  new Promise<File>((resolve, reject) => {
+    entry.file(resolve, reject);
+  });
+
+const collectMediaFilesFromEntry = async (
+  entry: FileSystemEntry
+): Promise<File[]> => {
+  if (entry.isFile) {
+    const file = await entryToFile(entry as FileSystemFileEntry);
+    return isMediaFile(file) ? [file] : [];
+  }
+  if (!entry.isDirectory) return [];
+
+  const reader = (entry as FileSystemDirectoryEntry).createReader();
+  const files: File[] = [];
+  let batch: FileSystemEntry[] = [];
+  do {
+    batch = await readDirectoryEntries(reader);
+    for (const child of batch) {
+      files.push(...(await collectMediaFilesFromEntry(child)));
+    }
+  } while (batch.length > 0);
+  return files;
+};
+
+const collectMediaFiles = async (
+  source: DataTransferItemList | FileList
+): Promise<File[]> => {
+  if (source instanceof FileList) {
+    return Array.from(source).filter(isMediaFile);
+  }
+
+  const files: File[] = [];
+  for (const item of Array.from(source)) {
+    const entry = item.webkitGetAsEntry?.();
+    if (!entry) {
+      const file = item.getAsFile();
+      if (file && isMediaFile(file)) files.push(file);
+      continue;
+    }
+    files.push(...(await collectMediaFilesFromEntry(entry)));
+  }
+  return files;
+};
+
+const resetInspirationMedia = () => {
+  inspirationMediaItems.value = [];
+  inspirationBatchUploading.value = false;
+};
+
+const resetMaterialMedia = () => {
+  materialMediaItems.value = [];
+  materialBatchUploading.value = false;
+};
+
+const getInspirationMediaUrls = () =>
+  inspirationMediaItems.value
+    .filter(item => item.status === "success" && item.url)
+    .map(item => item.url);
+
+const getMaterialMediaUrls = () =>
+  materialMediaItems.value
+    .filter(item => item.status === "success" && item.url)
+    .map(item => item.url);
+
+const syncInspirationFormCoverUrl = () => {
+  form.coverUrl = getInspirationMediaUrls()[0] || "";
+};
+
+const syncMaterialFormResourceUrl = () => {
+  form.resourceUrl = getMaterialMediaUrls()[0] || "";
+};
+
+const activeBatchMediaItems = computed(() =>
+  resourceKey.value === "materials"
+    ? materialMediaItems.value
+    : inspirationMediaItems.value
+);
+
+const activeBatchUploading = computed(() =>
+  resourceKey.value === "materials"
+    ? materialBatchUploading.value
+    : inspirationBatchUploading.value
+);
+
+const BATCH_UPLOAD_PROGRESS_CAP = 90;
+
+const getBatchItemDisplayProgress = (item: BatchMediaItem) => {
+  if (item.status === "success") return 100;
+  if (item.status === "uploading") {
+    return Math.min(item.progress, BATCH_UPLOAD_PROGRESS_CAP);
+  }
+  return item.progress;
+};
+
+const activeBatchUploadProgress = computed(() => {
+  const items = activeBatchMediaItems.value;
+  if (!items.length) return 0;
+  const total = items.reduce(
+    (sum, item) => sum + getBatchItemDisplayProgress(item),
+    0
+  );
+  return Math.round(total / items.length);
+});
+
+const activeBatchUploadSummary = computed(() => {
+  const items = activeBatchMediaItems.value;
+  return {
+    total: items.length,
+    success: items.filter(item => item.status === "success").length,
+    failed: items.filter(item => item.status === "error").length,
+    uploading: items.filter(item => item.status === "uploading").length
+  };
+});
+
+const removeBatchMediaItem = (field: ResourceField, uid: string) => {
+  const itemsRef = getBatchMediaItemsRef(field);
+  itemsRef.value = itemsRef.value.filter(item => item.uid !== uid);
+  if (isMaterialBatchUploadField(field)) {
+    syncMaterialFormResourceUrl();
+  } else {
+    syncInspirationFormCoverUrl();
+  }
+};
+
+const ensureBatchUploadReady = (field: ResourceField) => {
+  if (!isMaterialBatchUploadField(field)) return true;
+  if (!String(form.type || "").trim()) {
+    ElMessage.warning("请先选择资源类型");
+    return false;
+  }
+  return true;
+};
+
+const filterFilesForBatchUpload = (field: ResourceField, files: File[]) => {
+  if (isMaterialBatchUploadField(field)) {
+    const type = String(form.type || "");
+    const matched = files.filter(file => matchesMaterialType(file, type));
+    if (!matched.length) {
+      ElMessage.warning(type === "VIDEO" ? "请上传视频文件" : "请上传图片文件");
+      return [];
+    }
+    if (matched.length < files.length) {
+      ElMessage.warning(`已过滤不符合资源类型 ${type} 的文件`);
+    }
+    return matched;
+  }
+
+  const matched = files.filter(isMediaFile);
+  if (!matched.length) {
+    ElMessage.warning("请上传图片或视频文件");
+  }
+  return matched;
+};
+
+const enqueueBatchUpload = async (field: ResourceField, rawFiles: File[]) => {
+  if (!ensureBatchUploadReady(field)) return;
+
+  const files = filterFilesForBatchUpload(field, rawFiles);
+  if (!files.length) return;
+
+  const itemsRef = getBatchMediaItemsRef(field);
+  const uploadingRef = getBatchUploadingRef(field);
+  const newItems: BatchMediaItem[] = files.map(file => ({
+    uid: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    name: file.name,
+    url: "",
+    status: "pending",
+    progress: 0
+  }));
+  itemsRef.value.push(...newItems);
+  uploadingRef.value = true;
+
+  const uploadSingle = async (file: File, item: BatchMediaItem) => {
+    const itemIndex = itemsRef.value.findIndex(
+      currentItem => currentItem.uid === item.uid
+    );
+    if (itemIndex < 0) return false;
+
+    itemsRef.value[itemIndex].status = "uploading";
+    try {
+      const result = await adminApi.uploadFile(file, percent => {
+        itemsRef.value[itemIndex].progress = Math.min(
+          percent,
+          BATCH_UPLOAD_PROGRESS_CAP
+        );
+      });
+      itemsRef.value[itemIndex].url = result.url || "";
+      itemsRef.value[itemIndex].status = "success";
+      itemsRef.value[itemIndex].progress = 100;
+      return true;
+    } catch (error: any) {
+      itemsRef.value[itemIndex].status = "error";
+      itemsRef.value[itemIndex].error = error?.message || "上传失败";
+      itemsRef.value[itemIndex].progress = 0;
+      return false;
+    }
+  };
+
+  const results = await Promise.all(
+    files.map((file, index) => uploadSingle(file, newItems[index]))
+  );
+  const successCount = results.filter(Boolean).length;
+  uploadingRef.value = false;
+
+  if (isMaterialBatchUploadField(field)) {
+    syncMaterialFormResourceUrl();
+  } else {
+    syncInspirationFormCoverUrl();
+  }
+
+  const failedCount = files.length - successCount;
+  if (successCount === files.length) {
+    ElMessage.success(`成功上传 ${successCount} 个文件`);
+  } else if (successCount > 0) {
+    ElMessage.warning(
+      `上传完成：成功 ${successCount} 个，失败 ${failedCount} 个`
+    );
+  } else {
+    ElMessage.error("上传失败");
+  }
+};
+
+const openBatchMediaPicker = (
+  field: ResourceField,
+  options: { directory?: boolean } = {}
+) => {
+  if (!ensureBatchUploadReady(field)) return;
+  if (getBatchUploadingRef(field).value) return;
+
+  const input = document.createElement("input");
+  input.type = "file";
+  input.multiple = true;
+  const materialType = String(form.type || "");
+  input.accept =
+    isMaterialBatchUploadField(field) && materialType === "VIDEO"
+      ? "video/*"
+      : isMaterialBatchUploadField(field) && materialType === "IMAGE"
+        ? "image/*"
+        : "image/*,video/*";
+  if (options.directory) {
+    input.setAttribute("webkitdirectory", "");
+    input.setAttribute("directory", "");
+  }
+  input.onchange = async event => {
+    const target = event.target as HTMLInputElement;
+    const files = target.files ? await collectMediaFiles(target.files) : [];
+    if (files.length) await enqueueBatchUpload(field, files);
+  };
+  input.click();
+};
+
+const triggerBatchFileSelect = (field: ResourceField) => {
+  openBatchMediaPicker(field);
+};
+
+const triggerBatchFolderSelect = (field: ResourceField) => {
+  openBatchMediaPicker(field, { directory: true });
+};
+
+const handleBatchDrop = async (field: ResourceField, event: DragEvent) => {
+  if (!ensureBatchUploadReady(field)) return;
+  if (getBatchUploadingRef(field).value) return;
+  const items = event.dataTransfer?.items;
+  const files = items
+    ? await collectMediaFiles(items)
+    : Array.from(event.dataTransfer?.files || []).filter(isMediaFile);
+  if (files.length) await enqueueBatchUpload(field, files);
+};
+
 const fileToBase64 = (file: File) =>
   new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -1302,8 +1792,28 @@ const isUploadFieldLoading = (key: string) =>
   Boolean(uploadFieldLoading.value[key]);
 
 const uploadFieldFile = async (field: ResourceField, file: File) => {
+  if (
+    resourceKey.value === "materials" &&
+    field.key === "resourceUrl" &&
+    !String(form.type || "").trim()
+  ) {
+    ElMessage.warning("请先选择资源类型");
+    return;
+  }
+
   const isImage = file.type.startsWith("image/");
   const isVideo = file.type.startsWith("video/");
+  if (resourceKey.value === "materials" && field.key === "resourceUrl") {
+    const type = String(form.type || "");
+    if (type === "IMAGE" && !isImage) {
+      ElMessage.warning("请上传图片文件");
+      return;
+    }
+    if (type === "VIDEO" && !isVideo) {
+      ElMessage.warning("请上传视频文件");
+      return;
+    }
+  }
   if (!isImage && !isVideo) {
     ElMessage.warning("请上传图片或视频文件");
     return;
@@ -1734,12 +2244,146 @@ const uploadFieldFile = async (field: ResourceField, file: File) => {
               />
             </template>
           </el-select>
-          <div v-else-if="field.type === 'upload'" class="media-upload">
+          <div
+            v-else-if="field.type === 'upload' && isBatchUploadField(field)"
+            class="media-upload batch-media-upload"
+          >
+            <div
+              class="batch-upload-zone"
+              :class="{
+                'is-disabled': activeBatchUploading || isMaterialUploadDisabled
+              }"
+              @drop.prevent="
+                !isMaterialUploadDisabled && handleBatchDrop(field, $event)
+              "
+              @dragover.prevent
+            >
+              <IconifyIconOnline icon="ri:upload-cloud-2-line" />
+              <p>拖拽图片/视频或文件夹到此处上传</p>
+              <small>
+                {{
+                  isMaterialUploadDisabled
+                    ? "请先选择资源类型"
+                    : "支持批量并发上传"
+                }}
+              </small>
+              <div class="batch-upload-actions">
+                <el-button
+                  size="small"
+                  :disabled="activeBatchUploading || isMaterialUploadDisabled"
+                  @click.stop="triggerBatchFileSelect(field)"
+                >
+                  选择文件
+                </el-button>
+                <el-button
+                  size="small"
+                  :disabled="activeBatchUploading || isMaterialUploadDisabled"
+                  @click.stop="triggerBatchFolderSelect(field)"
+                >
+                  选择文件夹
+                </el-button>
+              </div>
+            </div>
+            <div
+              v-if="activeBatchMediaItems.length || activeBatchUploading"
+              class="batch-upload-progress"
+            >
+              <div class="batch-upload-progress-head">
+                <span>
+                  已完成
+                  {{ activeBatchUploadSummary.success }}/{{
+                    activeBatchUploadSummary.total
+                  }}
+                  <template v-if="activeBatchUploadSummary.uploading">
+                    （上传中 {{ activeBatchUploadSummary.uploading }}）
+                  </template>
+                </span>
+                <span v-if="activeBatchUploadSummary.failed">
+                  失败 {{ activeBatchUploadSummary.failed }}
+                </span>
+              </div>
+              <el-progress
+                :percentage="activeBatchUploadProgress"
+                :status="
+                  activeBatchUploading
+                    ? undefined
+                    : activeBatchUploadSummary.failed
+                      ? 'warning'
+                      : 'success'
+                "
+              />
+            </div>
+            <div v-if="activeBatchMediaItems.length" class="batch-upload-list">
+              <div
+                v-for="item in activeBatchMediaItems"
+                :key="item.uid"
+                class="batch-upload-item"
+              >
+                <div class="batch-upload-thumb">
+                  <img
+                    v-if="item.url && !isVideoCoverUrl(item.url)"
+                    :src="item.url"
+                    :alt="item.name"
+                  />
+                  <video
+                    v-else-if="item.url && isVideoCoverUrl(item.url)"
+                    :src="item.url"
+                    muted
+                  />
+                  <div v-else class="batch-upload-thumb-placeholder">
+                    <IconifyIconOnline icon="ri:file-image-line" />
+                  </div>
+                </div>
+                <div class="batch-upload-meta">
+                  <span class="batch-upload-name" :title="item.name">{{
+                    item.name
+                  }}</span>
+                  <el-progress
+                    v-if="item.status === 'uploading'"
+                    :percentage="getBatchItemDisplayProgress(item)"
+                    :stroke-width="6"
+                  />
+                  <small
+                    v-else-if="item.status === 'success'"
+                    class="batch-upload-status success"
+                  >
+                    上传成功
+                  </small>
+                  <small
+                    v-else-if="item.status === 'error'"
+                    class="batch-upload-status error"
+                  >
+                    {{ item.error || "上传失败" }}
+                  </small>
+                  <small v-else class="batch-upload-status">等待上传</small>
+                </div>
+                <el-button
+                  link
+                  type="danger"
+                  :disabled="activeBatchUploading"
+                  @click="removeBatchMediaItem(field, item.uid)"
+                >
+                  移除
+                </el-button>
+              </div>
+            </div>
+          </div>
+          <div
+            v-else-if="field.type === 'upload'"
+            class="media-upload"
+            :class="{
+              'media-upload--disabled':
+                isMaterialUploadField(field) && isMaterialUploadDisabled
+            }"
+          >
             <el-upload
               class="media-uploader"
               :show-file-list="false"
               :accept="field.accept || 'image/*,video/*'"
-              :disabled="isUploadFieldLoading(field.key)"
+              :disabled="
+                isUploadFieldLoading(field.key) ||
+                (isMaterialUploadField(field) && isMaterialUploadDisabled)
+              "
               :http-request="({ file }) => uploadFieldFile(field, file as File)"
             >
               <div v-if="form[field.key]" class="media-preview">
@@ -1760,7 +2404,9 @@ const uploadFieldFile = async (field: ResourceField, file: File) => {
                 <span>{{
                   isUploadFieldLoading(field.key)
                     ? "上传中..."
-                    : "点击上传图片或视频"
+                    : isMaterialUploadField(field) && isMaterialUploadDisabled
+                      ? "请先选择资源类型"
+                      : "点击上传图片或视频"
                 }}</span>
               </div>
             </el-upload>
@@ -1785,7 +2431,13 @@ const uploadFieldFile = async (field: ResourceField, file: File) => {
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="save">保存</el-button>
+        <el-button
+          type="primary"
+          :disabled="activeBatchUploading"
+          @click="save"
+        >
+          保存
+        </el-button>
       </template>
     </el-dialog>
 
@@ -2160,6 +2812,12 @@ h1 {
   width: 100%;
 }
 
+.media-upload--disabled .media-upload-trigger,
+.media-upload--disabled .media-preview {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .media-uploader {
   width: 100%;
 }
@@ -2221,6 +2879,143 @@ h1 {
 
 .media-preview:hover .media-preview-mask {
   opacity: 1;
+}
+
+.batch-media-upload {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.batch-upload-zone {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  min-height: 160px;
+  padding: 20px;
+  color: #7a7d8b;
+  text-align: center;
+  background: #faf9fc;
+  border: 1px dashed #d8d5e5;
+  border-radius: 12px;
+  transition: 0.2s;
+}
+
+.batch-upload-zone:hover,
+.batch-upload-zone.is-dragover {
+  border-color: #b8aef0;
+}
+
+.batch-upload-zone.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.batch-upload-zone svg,
+.batch-upload-zone .iconify {
+  font-size: 28px;
+  color: #8d7df0;
+}
+
+.batch-upload-zone p {
+  margin: 0;
+  font-weight: 600;
+  color: #4f5160;
+}
+
+.batch-upload-zone small {
+  color: #a0a2aa;
+}
+
+.batch-upload-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.batch-upload-progress {
+  padding: 12px 14px;
+  background: #faf9fc;
+  border: 1px solid #efeaf8;
+  border-radius: 12px;
+}
+
+.batch-upload-progress-head {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: #6d7080;
+}
+
+.batch-upload-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.batch-upload-item {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  background: #fff;
+  border: 1px solid #efeaf8;
+  border-radius: 12px;
+}
+
+.batch-upload-thumb {
+  flex-shrink: 0;
+  width: 56px;
+  height: 56px;
+  overflow: hidden;
+  background: #f5f3fa;
+  border-radius: 8px;
+}
+
+.batch-upload-thumb img,
+.batch-upload-thumb video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.batch-upload-thumb-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  color: #b8b9c3;
+}
+
+.batch-upload-meta {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.batch-upload-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 13px;
+  color: #4f5160;
+  white-space: nowrap;
+}
+
+.batch-upload-status.success {
+  color: #67c23a;
+}
+
+.batch-upload-status.error {
+  color: #f56c6c;
 }
 
 .media-cell {
