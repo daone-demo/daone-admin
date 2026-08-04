@@ -5,6 +5,7 @@ import { ElMessage, type FormInstance, type FormRules } from "element-plus";
 import { getTopMenu, initRouter } from "@/router/utils";
 import { adminApi } from "@/api/admin";
 import { setToken } from "@/utils/auth";
+import { runWithSubmitLock } from "@/utils/submitLock";
 
 defineOptions({ name: "Login" });
 
@@ -23,65 +24,61 @@ const rules: FormRules = {
   code: [{ required: true, message: "请输入验证码", trigger: "blur" }]
 };
 
-const sendCode = async () => {
-  await formRef.value?.validateField("phone");
-  sending.value = true;
-  try {
-    await adminApi.sendSmsCode(form.phone);
-    ElMessage.success("验证码已发送");
-    countdown.value = 60;
-    const timer = window.setInterval(() => {
-      countdown.value -= 1;
-      if (countdown.value <= 0) window.clearInterval(timer);
-    }, 1000);
-  } catch (error: any) {
-    if (error?.status === 403) {
-      ElMessage.error("当前手机号没有后台登录权限，请联系系统管理员授权");
-    } else {
-      ElMessage.error(error?.message || "验证码发送失败，请稍后重试");
+const sendCode = () =>
+  runWithSubmitLock(sending, async () => {
+    await formRef.value?.validateField("phone");
+    try {
+      await adminApi.sendSmsCode(form.phone);
+      ElMessage.success("验证码已发送");
+      countdown.value = 60;
+      const timer = window.setInterval(() => {
+        countdown.value -= 1;
+        if (countdown.value <= 0) window.clearInterval(timer);
+      }, 1000);
+    } catch (error: any) {
+      if (error?.status === 403) {
+        ElMessage.error("当前手机号没有后台登录权限，请联系系统管理员授权");
+      } else {
+        ElMessage.error(error?.message || "验证码发送失败，请稍后重试");
+      }
     }
-  } finally {
-    sending.value = false;
-  }
-};
+  });
 
-const login = async () => {
-  if (!accepted.value) {
-    ElMessage.warning("请先同意服务协议与隐私政策");
-    return;
-  }
-  const valid = await formRef.value?.validate().catch(() => false);
-  if (!valid) return;
-  loading.value = true;
-  try {
-    const data = await adminApi.smsLogin(form.phone, form.code);
-
-    // 短信登录只证明用户身份；后台接口还要求服务端管理员权限。
-    await adminApi.verifyAdminAccess(data.token);
-
-    setToken({
-      accessToken: data.token,
-      refreshToken: "",
-      expires: new Date(Date.now() + data.expiresInSeconds * 1000),
-      avatar: data.user.avatarUrl || "",
-      username: form.phone,
-      nickname: data.user.nickname,
-      roles: ["admin"],
-      permissions: ["*:*:*"]
-    });
-    await initRouter();
-    await router.push(getTopMenu(true).path);
-    ElMessage.success("欢迎进入 Daone 运营后台");
-  } catch (error: any) {
-    if (error?.status === 403) {
-      ElMessage.error("当前手机号没有后台管理员权限，请联系系统管理员授权");
-    } else {
-      ElMessage.error(error?.message || "登录失败，请稍后重试");
+const login = () =>
+  runWithSubmitLock(loading, async () => {
+    if (!accepted.value) {
+      ElMessage.warning("请先同意服务协议与隐私政策");
+      return;
     }
-  } finally {
-    loading.value = false;
-  }
-};
+    const valid = await formRef.value?.validate().catch(() => false);
+    if (!valid) return;
+    try {
+      const data = await adminApi.smsLogin(form.phone, form.code);
+
+      // 短信登录只证明用户身份；后台接口还要求服务端管理员权限。
+      await adminApi.verifyAdminAccess(data.token);
+
+      setToken({
+        accessToken: data.token,
+        refreshToken: "",
+        expires: new Date(Date.now() + data.expiresInSeconds * 1000),
+        avatar: data.user.avatarUrl || "",
+        username: form.phone,
+        nickname: data.user.nickname,
+        roles: ["admin"],
+        permissions: ["*:*:*"]
+      });
+      await initRouter();
+      await router.push(getTopMenu(true).path);
+      ElMessage.success("欢迎进入 Daone 运营后台");
+    } catch (error: any) {
+      if (error?.status === 403) {
+        ElMessage.error("当前手机号没有后台管理员权限，请联系系统管理员授权");
+      } else {
+        ElMessage.error(error?.message || "登录失败，请稍后重试");
+      }
+    }
+  });
 </script>
 
 <template>
@@ -152,7 +149,7 @@ const login = async () => {
                   link
                   type="primary"
                   :loading="sending"
-                  :disabled="countdown > 0"
+                  :disabled="countdown > 0 || sending"
                   @click="sendCode"
                 >
                   {{ countdown > 0 ? `${countdown}s 后重发` : "获取验证码" }}
@@ -168,6 +165,7 @@ const login = async () => {
             class="login-button"
             type="primary"
             :loading="loading"
+            :disabled="loading"
             @click="login"
           >
             登录

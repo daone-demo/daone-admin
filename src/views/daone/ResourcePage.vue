@@ -11,6 +11,7 @@ import {
   formatRecordDates,
   isDateTimeField
 } from "@/utils/date";
+import { useSubmitLock } from "@/utils/submitLock";
 import UserProjectCanvasPreview from "./UserProjectCanvasPreview.vue";
 
 defineOptions({ name: "DaoneResourcePage" });
@@ -235,6 +236,9 @@ const categoryOptions = ref<Array<{ label: string; value: string }>>([]);
 const parentCategoryRecords = ref<Array<Record<string, any>>>([]);
 const categoryOptionsLoading = ref(false);
 const loading = ref(false);
+const { submitting: saving, withSubmitLock: withSaveLock } = useSubmitLock();
+const { submitting: adjustingPoints, withSubmitLock: withAdjustLock } =
+  useSubmitLock();
 const apiError = ref("");
 const remoteTotal = ref(0);
 const currentPage = ref(1);
@@ -1164,192 +1168,207 @@ const toApiPayload = () => {
   return { ...form };
 };
 
-const save = async () => {
-  if (
-    (resourceKey.value === "inspirations" && inspirationBatchUploading.value) ||
-    (resourceKey.value === "materials" && materialBatchUploading.value)
-  ) {
-    ElMessage.warning("媒体上传中，请稍候");
-    return;
-  }
-  const missing = editorFields.value.find(
-    field => field.required && !String(form[field.key] ?? "").trim()
-  );
-  if (missing) {
-    ElMessage.warning(`请填写${missing.label}`);
-    return;
-  }
-  if (
-    resourceKey.value === "inspirations" &&
-    !editingId.value &&
-    !getInspirationMediaUrls().length
-  ) {
-    ElMessage.warning("请上传媒体资源");
-    return;
-  }
-  if (
-    resourceKey.value === "materials" &&
-    !editingId.value &&
-    !getMaterialMediaUrls().length
-  ) {
-    ElMessage.warning("请上传资源文件");
-    return;
-  }
-  if (config.value.apiResource && shouldUseApi()) {
-    loading.value = true;
-    try {
-      const payload = toApiPayload();
-      if (resourceKey.value === "workflows") {
-        editingId.value
-          ? await adminApi.updateWorkflow(editingId.value, payload)
-          : await adminApi.createWorkflow(payload);
-      }
-      if (resourceKey.value === "plans") {
-        editingId.value
-          ? await adminApi.updatePlan(String(form.planCode), payload)
-          : await adminApi.createPlan(payload);
-      }
-      if (resourceKey.value === "pointPackages") {
-        editingId.value
-          ? await adminApi.updatePointPackage(String(editingId.value), payload)
-          : await adminApi.createPointPackage(payload);
-      }
-      if (resourceKey.value === "models") {
-        editingId.value
-          ? await adminApi.updateModel(String(current.value.modelCode), payload)
-          : await adminApi.createModel(payload);
-      }
-      if (resourceKey.value === "prompts") {
-        editingId.value
-          ? await adminApi.updatePromptTemplate(String(form.code), payload)
-          : await adminApi.createPromptTemplate(payload);
-      }
-      if (resourceKey.value === "inspirations") {
-        const mediaUrls = getInspirationMediaUrls();
-        const createdCount = !editingId.value ? mediaUrls.length : 0;
-        const basePayload = {
-          title: form.title,
-          categoryId: form.categoryCode,
-          prompt: form.prompt
-        };
-        if (editingId.value) {
-          const coverUrls = mediaUrls.length
-            ? mediaUrls
-            : form.coverUrl
-              ? [String(form.coverUrl)]
-              : [];
-          await adminApi.updateInspiration(editingId.value, {
-            ...basePayload,
-            coverUrl: coverUrls
-          });
-        } else {
-          const coverUrls = mediaUrls.length
-            ? mediaUrls
-            : form.coverUrl
-              ? [String(form.coverUrl)]
-              : [];
-          await adminApi.createInspiration({
-            ...basePayload,
-            coverUrl: coverUrls
-          });
-        }
-        await loadRemote();
-        dialogVisible.value = false;
-        if (createdCount > 1) {
-          ElMessage.success(`成功发布 ${createdCount} 条灵感`);
-        } else {
-          ElMessage.success(editingId.value ? "接口保存成功" : "接口创建成功");
-        }
-        return;
-      }
-      if (resourceKey.value === "materials") {
-        const mediaUrls = getMaterialMediaUrls();
-        const createdCount = !editingId.value ? mediaUrls.length : 0;
-        const basePayload = {
-          title: form.title,
-          type: form.type || "IMAGE",
-          categoryId: form.categoryCode,
-          sortNo: Number(form.sortNo || 0),
-          status: "ENABLED"
-        };
-        if (editingId.value) {
-          const resourceUrls = mediaUrls.length
-            ? mediaUrls
-            : form.resourceUrl
-              ? [String(form.resourceUrl)]
-              : [];
-          await adminApi.updateMaterial(editingId.value, {
-            ...basePayload,
-            resourceUrls,
-            coverUrl:
-              form.coverUrl ||
-              (form.type === "IMAGE" ? resourceUrls[0] : form.coverUrl)
-          });
-        } else {
-          const resourceUrls = mediaUrls.length
-            ? mediaUrls
-            : form.resourceUrl
-              ? [String(form.resourceUrl)]
-              : [];
-          const createPayload: Record<string, any> = {
-            ...basePayload,
-            resourceUrls
-          };
-          if (resourceUrls.length === 1 && form.type === "IMAGE") {
-            createPayload.coverUrl = form.coverUrl || resourceUrls[0];
-          }
-          await adminApi.createMaterial(createPayload);
-        }
-        await loadRemote();
-        dialogVisible.value = false;
-        if (createdCount > 1) {
-          ElMessage.success(`成功发布 ${createdCount} 条素材`);
-        } else {
-          ElMessage.success(editingId.value ? "接口保存成功" : "接口创建成功");
-        }
-        return;
-      }
-      if (resourceKey.value === "materialCategories") {
-        editingId.value
-          ? await adminApi.updateMaterialCategory(editingId.value, payload)
-          : await adminApi.createMaterialCategory(payload);
-      }
-      if (resourceKey.value === "categories") {
-        editingId.value
-          ? await adminApi.updateCategory(String(editingId.value), payload)
-          : await adminApi.createCategory(payload);
-      }
-      if (resourceKey.value === "invoices") {
-        editingId.value
-          ? await adminApi.updateInvoice(editingId.value, payload)
-          : await adminApi.createInvoice(payload);
-      }
-      await loadRemote();
-      dialogVisible.value = false;
-      ElMessage.success(editingId.value ? "接口保存成功" : "接口创建成功");
+const save = () =>
+  withSaveLock(async () => {
+    if (
+      (resourceKey.value === "inspirations" &&
+        inspirationBatchUploading.value) ||
+      (resourceKey.value === "materials" && materialBatchUploading.value)
+    ) {
+      ElMessage.warning("媒体上传中，请稍候");
       return;
-    } catch (error: any) {
-      ElMessage.error(error?.message || "接口保存失败");
-      return;
-    } finally {
-      loading.value = false;
     }
-  }
-  if (editingId.value) {
-    const index = records.value.findIndex(item => item.id === editingId.value);
-    if (index >= 0) records.value[index] = { ...records.value[index], ...form };
-  } else {
-    records.value.unshift({
-      id: `${resourceKey.value.toUpperCase().slice(0, 3)}-${Date.now().toString().slice(-6)}`,
-      ...form,
-      status: "启用",
-      createdAt: formatDateTime(new Date()),
-      updatedAt: formatDateTime(new Date())
-    });
-  }
-  dialogVisible.value = false;
-  ElMessage.success(editingId.value ? "保存成功" : "创建成功");
-};
+    const missing = editorFields.value.find(
+      field => field.required && !String(form[field.key] ?? "").trim()
+    );
+    if (missing) {
+      ElMessage.warning(`请填写${missing.label}`);
+      return;
+    }
+    if (
+      resourceKey.value === "inspirations" &&
+      !editingId.value &&
+      !getInspirationMediaUrls().length
+    ) {
+      ElMessage.warning("请上传媒体资源");
+      return;
+    }
+    if (
+      resourceKey.value === "materials" &&
+      !editingId.value &&
+      !getMaterialMediaUrls().length
+    ) {
+      ElMessage.warning("请上传资源文件");
+      return;
+    }
+    if (config.value.apiResource && shouldUseApi()) {
+      loading.value = true;
+      try {
+        const payload = toApiPayload();
+        if (resourceKey.value === "workflows") {
+          editingId.value
+            ? await adminApi.updateWorkflow(editingId.value, payload)
+            : await adminApi.createWorkflow(payload);
+        }
+        if (resourceKey.value === "plans") {
+          editingId.value
+            ? await adminApi.updatePlan(String(form.planCode), payload)
+            : await adminApi.createPlan(payload);
+        }
+        if (resourceKey.value === "pointPackages") {
+          editingId.value
+            ? await adminApi.updatePointPackage(
+                String(editingId.value),
+                payload
+              )
+            : await adminApi.createPointPackage(payload);
+        }
+        if (resourceKey.value === "models") {
+          editingId.value
+            ? await adminApi.updateModel(
+                String(current.value.modelCode),
+                payload
+              )
+            : await adminApi.createModel(payload);
+        }
+        if (resourceKey.value === "prompts") {
+          editingId.value
+            ? await adminApi.updatePromptTemplate(String(form.code), payload)
+            : await adminApi.createPromptTemplate(payload);
+        }
+        if (resourceKey.value === "inspirations") {
+          const mediaUrls = getInspirationMediaUrls();
+          const createdCount = !editingId.value ? mediaUrls.length : 0;
+          const basePayload = {
+            title: form.title,
+            categoryId: form.categoryCode,
+            prompt: form.prompt
+          };
+          if (editingId.value) {
+            const coverUrls = mediaUrls.length
+              ? mediaUrls
+              : form.coverUrl
+                ? [String(form.coverUrl)]
+                : [];
+            await adminApi.updateInspiration(editingId.value, {
+              ...basePayload,
+              coverUrl: coverUrls
+            });
+          } else {
+            const coverUrls = mediaUrls.length
+              ? mediaUrls
+              : form.coverUrl
+                ? [String(form.coverUrl)]
+                : [];
+            await adminApi.createInspiration({
+              ...basePayload,
+              coverUrl: coverUrls
+            });
+          }
+          await loadRemote();
+          dialogVisible.value = false;
+          if (createdCount > 1) {
+            ElMessage.success(`成功发布 ${createdCount} 条灵感`);
+          } else {
+            ElMessage.success(
+              editingId.value ? "接口保存成功" : "接口创建成功"
+            );
+          }
+          return;
+        }
+        if (resourceKey.value === "materials") {
+          const mediaUrls = getMaterialMediaUrls();
+          const createdCount = !editingId.value ? mediaUrls.length : 0;
+          const basePayload = {
+            title: form.title,
+            type: form.type || "IMAGE",
+            categoryId: form.categoryCode,
+            sortNo: Number(form.sortNo || 0),
+            status: "ENABLED"
+          };
+          if (editingId.value) {
+            const resourceUrls = mediaUrls.length
+              ? mediaUrls
+              : form.resourceUrl
+                ? [String(form.resourceUrl)]
+                : [];
+            await adminApi.updateMaterial(editingId.value, {
+              ...basePayload,
+              resourceUrls,
+              coverUrl:
+                form.coverUrl ||
+                (form.type === "IMAGE" ? resourceUrls[0] : form.coverUrl)
+            });
+          } else {
+            const resourceUrls = mediaUrls.length
+              ? mediaUrls
+              : form.resourceUrl
+                ? [String(form.resourceUrl)]
+                : [];
+            const createPayload: Record<string, any> = {
+              ...basePayload,
+              resourceUrls
+            };
+            if (resourceUrls.length === 1 && form.type === "IMAGE") {
+              createPayload.coverUrl = form.coverUrl || resourceUrls[0];
+            }
+            await adminApi.createMaterial(createPayload);
+          }
+          await loadRemote();
+          dialogVisible.value = false;
+          if (createdCount > 1) {
+            ElMessage.success(`成功发布 ${createdCount} 条素材`);
+          } else {
+            ElMessage.success(
+              editingId.value ? "接口保存成功" : "接口创建成功"
+            );
+          }
+          return;
+        }
+        if (resourceKey.value === "materialCategories") {
+          editingId.value
+            ? await adminApi.updateMaterialCategory(editingId.value, payload)
+            : await adminApi.createMaterialCategory(payload);
+        }
+        if (resourceKey.value === "categories") {
+          editingId.value
+            ? await adminApi.updateCategory(String(editingId.value), payload)
+            : await adminApi.createCategory(payload);
+        }
+        if (resourceKey.value === "invoices") {
+          editingId.value
+            ? await adminApi.updateInvoice(editingId.value, payload)
+            : await adminApi.createInvoice(payload);
+        }
+        await loadRemote();
+        dialogVisible.value = false;
+        ElMessage.success(editingId.value ? "接口保存成功" : "接口创建成功");
+        return;
+      } catch (error: any) {
+        ElMessage.error(error?.message || "接口保存失败");
+        return;
+      } finally {
+        loading.value = false;
+      }
+    }
+    if (editingId.value) {
+      const index = records.value.findIndex(
+        item => item.id === editingId.value
+      );
+      if (index >= 0)
+        records.value[index] = { ...records.value[index], ...form };
+    } else {
+      records.value.unshift({
+        id: `${resourceKey.value.toUpperCase().slice(0, 3)}-${Date.now().toString().slice(-6)}`,
+        ...form,
+        status: "启用",
+        createdAt: formatDateTime(new Date()),
+        updatedAt: formatDateTime(new Date())
+      });
+    }
+    dialogVisible.value = false;
+    ElMessage.success(editingId.value ? "保存成功" : "创建成功");
+  });
 
 const handleSelectionChange = (rows: Array<Record<string, any>>) => {
   selectedRows.value = rows;
@@ -1540,24 +1559,25 @@ const openPoints = (row: Record<string, any>) => {
   pointsVisible.value = true;
 };
 
-const adjustPoints = async () => {
-  if (config.value.apiResource && shouldUseApi()) {
-    try {
-      await adminApi.adjustUserPoints(
-        String(current.value.id),
-        Number(form.adjustAmount || 0),
-        String(form.adjustReason || "")
-      );
-    } catch (error: any) {
-      ElMessage.error(error?.message || "积分调整失败");
-      return;
+const adjustPoints = () =>
+  withAdjustLock(async () => {
+    if (config.value.apiResource && shouldUseApi()) {
+      try {
+        await adminApi.adjustUserPoints(
+          String(current.value.id),
+          Number(form.adjustAmount || 0),
+          String(form.adjustReason || "")
+        );
+      } catch (error: any) {
+        ElMessage.error(error?.message || "积分调整失败");
+        return;
+      }
     }
-  }
-  current.value.points =
-    Number(current.value.points || 0) + Number(form.adjustAmount || 0);
-  pointsVisible.value = false;
-  ElMessage.success("积分调整成功，流水已记录");
-};
+    current.value.points =
+      Number(current.value.points || 0) + Number(form.adjustAmount || 0);
+    pointsVisible.value = false;
+    ElMessage.success("积分调整成功，流水已记录");
+  });
 
 const statusType = (value: string) => {
   if (["会员", "MEMBER"].includes(value)) return "success";
@@ -2642,7 +2662,8 @@ const uploadFieldFile = async (field: ResourceField, file: File) => {
         <el-button @click="dialogVisible = false">取消</el-button>
         <el-button
           type="primary"
-          :disabled="activeBatchUploading"
+          :loading="saving"
+          :disabled="activeBatchUploading || saving"
           @click="save"
         >
           保存
@@ -2748,7 +2769,14 @@ const uploadFieldFile = async (field: ResourceField, file: File) => {
       </el-form>
       <template #footer>
         <el-button @click="pointsVisible = false">取消</el-button>
-        <el-button type="primary" @click="adjustPoints">确认调整</el-button>
+        <el-button
+          type="primary"
+          :loading="adjustingPoints"
+          :disabled="adjustingPoints"
+          @click="adjustPoints"
+        >
+          确认调整
+        </el-button>
       </template>
     </el-dialog>
   </div>
