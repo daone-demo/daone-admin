@@ -238,6 +238,8 @@ const loading = ref(false);
 const apiError = ref("");
 const remoteTotal = ref(0);
 const currentPage = ref(1);
+const tableRef = ref();
+const selectedRows = ref<Array<Record<string, any>>>([]);
 const getDefaultPageSize = () => config.value?.defaultPageSize ?? 10;
 const pageSize = ref(getDefaultPageSize());
 const PAGE_SIZES = [10, 20, 50, 100, 1000];
@@ -284,8 +286,8 @@ const invoiceStatusOptions = [
 ];
 
 const userSubscriptionStatusOptions = [
-  { label: "有效会员", value: "ACTIVE" },
-  { label: "过期会员", value: "EXPIRED" }
+  { label: "会员", value: "ACTIVE" },
+  { label: "非会员", value: "EXPIRED" }
 ];
 
 const orderPayTypeOptions = [
@@ -319,10 +321,17 @@ const formatMaterialType = (value: string) =>
 const formatCategoryLevel = (row: Record<string, any>) => {
   const level = Number(row.level ?? 1);
   if (level >= 2) {
-    const parent = records.value.find(
-      item => String(item.id) === String(row.parentId)
-    );
-    return parent ? `二级类目 ${parent.categoryName}` : "二级类目";
+    const categoryName = String(row.categoryName || row.name || "");
+    let parentName = String(row.parentName || "").trim();
+    if (!parentName) {
+      const parent = records.value.find(
+        item => String(item.id) === String(row.parentId)
+      );
+      parentName = parent ? String(parent.categoryName || "") : "";
+    }
+    return parentName
+      ? `${parentName} / ${categoryName}`
+      : categoryName || "二级类目";
   }
   return "一级类目";
 };
@@ -486,9 +495,9 @@ const normalizeRemoteRows = (items: any[]) => {
       status: item.status === "ENABLED" ? "启用" : "停用",
       memberStatus:
         item.subscriptionStatus === "ACTIVE"
-          ? "有效会员"
+          ? "会员"
           : item.subscriptionStatus === "EXPIRED"
-            ? "过期会员"
+            ? "非会员"
             : item.memberStatus === "MEMBER"
               ? "会员"
               : item.memberStatus === "NON_MEMBER"
@@ -550,6 +559,15 @@ const normalizeRemoteRows = (items: any[]) => {
       id: String(item.id),
       type: String(item.type || ""),
       sortNo: Number(item.sortNo || 0),
+      updatedAt: item.updatedAt || item.gmtModified || item.createdAt,
+      status: normalizeStatus(item.status)
+    }));
+  } else if (resourceKey.value === "inspirations") {
+    rows = items.map(item => ({
+      ...item,
+      id: String(item.id),
+      categoryName: String(item.categoryName || ""),
+      categoryCode: String(item.categoryId || item.categoryCode || ""),
       updatedAt: item.updatedAt || item.gmtModified || item.createdAt,
       status: normalizeStatus(item.status)
     }));
@@ -768,6 +786,9 @@ const loadRemote = async (options: { resetFilters?: boolean } = {}) => {
     ElMessage.warning(`${apiError.value}，当前展示接口字段示例`);
   } finally {
     loading.value = false;
+    if (isContentListResource.value) {
+      clearTableSelection();
+    }
   }
   if (resourceKey.value === "categories") {
     await loadParentCategoryOptions();
@@ -1316,6 +1337,48 @@ const save = async () => {
   }
   dialogVisible.value = false;
   ElMessage.success(editingId.value ? "保存成功" : "创建成功");
+};
+
+const handleSelectionChange = (rows: Array<Record<string, any>>) => {
+  selectedRows.value = rows;
+};
+
+const clearTableSelection = () => {
+  selectedRows.value = [];
+  tableRef.value?.clearSelection?.();
+};
+
+const batchRemove = async () => {
+  if (!selectedRows.value.length) return;
+  const rows = [...selectedRows.value];
+  const count = rows.length;
+  const ids = rows.map(row => String(row.id));
+  await ElMessageBox.confirm(
+    `确定删除选中的 ${count} 条记录吗？删除后不可恢复。`,
+    "批量删除确认",
+    { type: "warning" }
+  );
+  if (config.value.apiResource && shouldUseApi()) {
+    try {
+      if (resourceKey.value === "inspirations") {
+        await adminApi.batchDeleteInspirations(ids);
+      } else if (resourceKey.value === "materials") {
+        await adminApi.batchDeleteMaterials(ids);
+      } else {
+        throw new Error("不支持批量删除该类型记录");
+      }
+      clearTableSelection();
+      await loadRemote();
+      ElMessage.success(`成功删除 ${count} 条记录`);
+    } catch (error: any) {
+      ElMessage.error(error?.message || "批量删除失败");
+    }
+    return;
+  }
+  const idSet = new Set(ids);
+  records.value = records.value.filter(item => !idSet.has(String(item.id)));
+  clearTableSelection();
+  ElMessage.success(`成功删除 ${count} 条记录`);
 };
 
 const remove = async (row: Record<string, any>) => {
@@ -2077,14 +2140,27 @@ const uploadFieldFile = async (field: ResourceField, file: File) => {
           <IconifyIconOnline icon="ri:refresh-line" />
           重置
         </el-button>
+        <el-button
+          v-if="isContentListResource && config.allowDelete !== false"
+          type="danger"
+          plain
+          :disabled="!selectedRows.length"
+          @click="batchRemove"
+        >
+          <IconifyIconOnline icon="ri:delete-bin-line" />
+          批量删除
+          <span v-if="selectedRows.length">({{ selectedRows.length }})</span>
+        </el-button>
         <div class="record-count">共 {{ paginationTotal }} 条</div>
       </div>
 
       <el-table
+        ref="tableRef"
         v-loading="loading"
         :data="paginatedRecords"
         row-key="id"
         class="resource-table"
+        @selection-change="handleSelectionChange"
         :class="{ 'resource-table--full': isTableFullWidth }"
         :style="isTableFullWidth ? { width: '100%' } : undefined"
         :tree-props="
@@ -2094,6 +2170,12 @@ const uploadFieldFile = async (field: ResourceField, file: File) => {
         "
         :default-expand-all="isTreeMode"
       >
+        <el-table-column
+          v-if="isContentListResource && config.allowDelete !== false"
+          type="selection"
+          width="48"
+          fixed="left"
+        />
         <el-table-column
           v-for="column in config.columns"
           :key="column.key"
@@ -2117,7 +2199,6 @@ const uploadFieldFile = async (field: ResourceField, file: File) => {
                   'nickname',
                   'modelName',
                   'planName',
-                  'categoryName',
                   'invoiceTitle'
                 ].includes(column.key)
               "
@@ -2209,6 +2290,14 @@ const uploadFieldFile = async (field: ResourceField, file: File) => {
               :title="row.resourceUrl"
             >
               {{ row.resourceUrl }}
+            </span>
+            <span v-else-if="column.key === 'categoryName'">
+              {{
+                row.categoryName ||
+                categoryLabelMap[row.categoryCode] ||
+                row.categoryCode ||
+                "-"
+              }}
             </span>
             <span v-else-if="column.key === 'categoryCode'">
               {{ categoryLabelMap[row.categoryCode] || row.categoryCode }}

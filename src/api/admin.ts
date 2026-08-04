@@ -392,6 +392,9 @@ export const adminApi = {
       client.delete(`/admin/v1/inspirations/${encodeURIComponent(id)}`)
     );
   },
+  batchDeleteInspirations(ids: string[]) {
+    return unwrap(client.delete("/admin/v1/inspirations", { data: ids }));
+  },
   materials(
     params: {
       keyword?: string;
@@ -420,6 +423,9 @@ export const adminApi = {
     return unwrap(
       client.delete(`/admin/v1/materials/${encodeURIComponent(id)}`)
     );
+  },
+  batchDeleteMaterials(ids: string[]) {
+    return unwrap(client.delete("/admin/v1/materials", { data: ids }));
   },
   updateMaterialStatus(id: string, status: string) {
     return unwrap(

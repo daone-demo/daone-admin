@@ -414,7 +414,7 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
     apiResource: "inspirations",
     allowDelete: true,
     createText: "发布灵感",
-    searchable: ["title", "category", "author"],
+    searchable: ["prompt", "categoryName", "authorName"],
     fields: [
       // { key: "title", label: "标题", required: true },
       {
@@ -432,8 +432,7 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
       { key: "prompt", label: "创作提示词", type: "textarea" }
     ],
     columns: [
-      { key: "title", label: "灵感内容" },
-      { key: "categoryCode", label: "分类" },
+      { key: "categoryName", label: "分类" },
       { key: "coverUrl", label: "封面" },
       { key: "prompt", label: "创作提示词" },
       { key: "updatedAt", label: "更新时间" },
@@ -444,6 +443,7 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
         id: "I-01",
         title: "品牌视觉案例",
         categoryCode: "BRAND",
+        categoryName: "品牌设计",
         coverUrl: "https://picsum.photos/seed/daone-brand/320/200",
         prompt: "为新消费品牌生成一套现代视觉海报",
         updatedAt: "2026-06-18 10:20",
@@ -453,6 +453,7 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
         id: "I-02",
         title: "夏日饮品海报",
         categoryCode: "POSTER",
+        categoryName: "海报与广告",
         coverUrl: "https://picsum.photos/seed/daone-poster/320/200",
         prompt: "夏日冰饮促销海报，清爽高饱和色彩",
         updatedAt: "2026-06-17 16:40",
@@ -462,6 +463,7 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
         id: "I-03",
         title: "未来感产品概念",
         categoryCode: "PRODUCT",
+        categoryName: "产品概念",
         coverUrl: "https://picsum.photos/seed/daone-product/320/200",
         prompt: "未来科技产品概念设计，银色材质",
         updatedAt: "2026-06-16 09:25",
