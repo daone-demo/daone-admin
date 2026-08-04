@@ -412,9 +412,9 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
     icon: "ri:lightbulb-flash-line",
     color: "#e84393",
     apiResource: "inspirations",
+    serverFilters: true,
     allowDelete: true,
     createText: "发布灵感",
-    searchable: ["prompt", "categoryName", "authorName"],
     fields: [
       // { key: "title", label: "标题", required: true },
       {
@@ -712,7 +712,6 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
     allowDelete: true,
     allowStatus: true,
     createText: "发布素材",
-    searchable: ["title", "categoryCode", "type"],
     fields: [
       // { key: "title", label: "标题", required: true },
       {

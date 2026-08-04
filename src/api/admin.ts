@@ -362,8 +362,12 @@ export const adminApi = {
       )
     );
   },
-  inspirations() {
-    return unwrap(client.get("/admin/v1/inspirations")) as Promise<
+  inspirations(
+    params: {
+      categoryId?: string;
+    } = {}
+  ) {
+    return unwrap(client.get("/admin/v1/inspirations", { params })) as Promise<
       { items?: any[] } | any[]
     >;
   },

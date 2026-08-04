@@ -389,9 +389,13 @@ const buildModelQueryParams = () => {
 
 const buildMaterialQueryParams = () => {
   const params: Record<string, string> = {};
-  const word = keyword.value.trim();
-  if (word) params.keyword = word;
   if (statusFilter.value) params.status = statusFilter.value;
+  if (categoryFilter.value) params.categoryId = categoryFilter.value;
+  return params;
+};
+
+const buildInspirationQueryParams = () => {
+  const params: Record<string, string> = {};
   if (categoryFilter.value) params.categoryId = categoryFilter.value;
   return params;
 };
@@ -750,7 +754,9 @@ const loadRemote = async (options: { resetFilters?: boolean } = {}) => {
     } else if (apiResource === "prompts") {
       items = normalizeList(await adminApi.promptTemplates());
     } else if (apiResource === "inspirations") {
-      items = normalizeList(await adminApi.inspirations());
+      items = normalizeList(
+        await adminApi.inspirations(buildInspirationQueryParams())
+      );
     } else if (apiResource === "materials") {
       items = await fetchPaginatedResource(params =>
         adminApi.materials({ ...buildMaterialQueryParams(), ...params })
@@ -821,8 +827,14 @@ const filteredRecords = computed(() => {
           .toLowerCase()
           .includes(word)
       );
+    const matchesCategory =
+      !isContentListResource.value ||
+      !categoryFilter.value ||
+      String(item.categoryId || item.categoryCode || "") ===
+        categoryFilter.value;
     return (
       matchesWord &&
+      matchesCategory &&
       (!statusFilter.value ||
         item.status === statusFilter.value ||
         item.statusRaw === statusFilter.value ||
@@ -889,7 +901,7 @@ const paginationLayout = computed(() =>
 
 const paginatedRecords = computed(() => tableRecords.value);
 
-watch([keyword, statusFilter], () => {
+watch([keyword, statusFilter, categoryFilter], () => {
   if (useServerFilters() || useServerPagination()) return;
   currentPage.value = 1;
 });
@@ -2055,6 +2067,7 @@ const uploadFieldFile = async (field: ResourceField, file: File) => {
     <section class="table-card">
       <div class="toolbar">
         <el-input
+          v-if="!isContentListResource"
           v-model="keyword"
           clearable
           class="search"
@@ -2064,6 +2077,21 @@ const uploadFieldFile = async (field: ResourceField, file: File) => {
             <IconifyIconOnline icon="ri:search-line" />
           </template>
         </el-input>
+        <el-select
+          v-if="isContentListResource"
+          v-model="categoryFilter"
+          clearable
+          placeholder="请选择分类"
+          class="search"
+          :loading="categoryOptionsLoading"
+        >
+          <el-option
+            v-for="option in categoryOptions"
+            :key="option.value"
+            :label="option.label"
+            :value="option.value"
+          />
+        </el-select>
         <el-select
           v-model="statusFilter"
           clearable
@@ -2075,21 +2103,6 @@ const uploadFieldFile = async (field: ResourceField, file: File) => {
             :key="item.value"
             :label="item.label"
             :value="item.value"
-          />
-        </el-select>
-        <el-select
-          v-if="isMaterialResource"
-          v-model="categoryFilter"
-          clearable
-          placeholder="全部分类"
-          class="category-filter"
-          :loading="categoryOptionsLoading"
-        >
-          <el-option
-            v-for="option in categoryOptions"
-            :key="option.value"
-            :label="option.label"
-            :value="option.value"
           />
         </el-select>
         <el-select
