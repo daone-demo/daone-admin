@@ -157,12 +157,12 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
     columns: [
       { key: "nickname", label: "用户昵称" },
       { key: "phone", label: "手机号" },
-      { key: "companyName", label: "公司名称/品牌名称" },
+      { key: "companyName", label: "公司/品牌" },
       { key: "position", label: "岗位" },
       { key: "role", label: "角色", width: 100 },
       { key: "createdAt", label: "注册时间" },
       { key: "lastUsedAt", label: "最近使用时间" },
-      { key: "memberStatus", label: "状态", width: 100 }
+      { key: "memberStatus", label: "会员状态", width: 100 }
     ],
     records: [
       {

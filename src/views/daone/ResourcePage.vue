@@ -11,6 +11,7 @@ import {
   formatRecordDates,
   isDateTimeField
 } from "@/utils/date";
+import UserProjectCanvasPreview from "./UserProjectCanvasPreview.vue";
 
 defineOptions({ name: "DaoneResourcePage" });
 
@@ -221,6 +222,10 @@ const userProjectsLoading = ref(false);
 const userProjectsPage = ref(1);
 const userProjectsPageSize = 10;
 const userProjectsTotal = ref(0);
+const projectCanvasVisible = ref(false);
+const projectCanvasLoading = ref(false);
+const projectCanvasTitle = ref("");
+const projectCanvasPayload = ref<Record<string, unknown> | null>(null);
 const pointsVisible = ref(false);
 const editingId = ref("");
 const current = ref<Record<string, any>>({});
@@ -264,6 +269,25 @@ const orderStatusOptions = [
   { label: "已退款", value: "REFUNDED" }
 ];
 
+const invoiceStatusLabels: Record<string, string> = {
+  PENDING: "待开票",
+  PROCESSING: "开票中",
+  ISSUED: "已开票",
+  REJECTED: "已驳回"
+};
+
+const invoiceStatusOptions = [
+  { label: "待开票", value: "PENDING" },
+  { label: "开票中", value: "PROCESSING" },
+  { label: "已开票", value: "ISSUED" },
+  { label: "已驳回", value: "REJECTED" }
+];
+
+const userSubscriptionStatusOptions = [
+  { label: "有效会员", value: "ACTIVE" },
+  { label: "过期会员", value: "EXPIRED" }
+];
+
 const orderPayTypeOptions = [
   { label: "微信", value: "WECHAT" },
   { label: "支付宝", value: "ALIPAY" }
@@ -285,6 +309,9 @@ const formatOrderPayType = (value: string) =>
 
 const formatOrderStatus = (value: string) =>
   orderStatusLabels[String(value || "").toUpperCase()] || value;
+
+const formatInvoiceStatus = (value: string) =>
+  invoiceStatusLabels[String(value || "").toUpperCase()] || value;
 
 const formatMaterialType = (value: string) =>
   materialTypeLabels[String(value || "").toUpperCase()] || value;
@@ -336,6 +363,9 @@ const buildOrderQueryParams = () => {
 
 const buildUserQueryParams = () => {
   const params: Record<string, string> = {};
+  const word = keyword.value.trim();
+  if (word) params.keyword = word;
+  if (statusFilter.value) params.subscriptionStatus = statusFilter.value;
   if (userDateRange.value?.[0]) params.startDate = userDateRange.value[0];
   if (userDateRange.value?.[1]) params.endDate = userDateRange.value[1];
   return params;
@@ -371,6 +401,12 @@ const statusFilterOptions = computed(() => {
     config.value?.serverFilters
   ) {
     return materialStatusOptions;
+  }
+  if (resourceKey.value === "invoices") {
+    return invoiceStatusOptions;
+  }
+  if (resourceKey.value === "users") {
+    return userSubscriptionStatusOptions;
   }
   if (config.value?.serverFilters) {
     return orderStatusOptions;
@@ -446,13 +482,18 @@ const normalizeRemoteRows = (items: any[]) => {
     rows = items.map(item => ({
       ...item,
       id: String(item.id),
+      subscriptionStatus: String(item.subscriptionStatus || ""),
       status: item.status === "ENABLED" ? "启用" : "停用",
       memberStatus:
-        item.memberStatus === "MEMBER"
-          ? "会员"
-          : item.memberStatus === "NON_MEMBER"
-            ? "非会员"
-            : "-"
+        item.subscriptionStatus === "ACTIVE"
+          ? "有效会员"
+          : item.subscriptionStatus === "EXPIRED"
+            ? "过期会员"
+            : item.memberStatus === "MEMBER"
+              ? "会员"
+              : item.memberStatus === "NON_MEMBER"
+                ? "非会员"
+                : "-"
     }));
   } else if (resourceKey.value === "orders") {
     rows = items.map(item => ({
@@ -466,7 +507,9 @@ const normalizeRemoteRows = (items: any[]) => {
     rows = items.map(item => ({
       ...item,
       id: item.id || item.invoiceId,
-      amountYuan: Number(item.amountFen || 0) / 100
+      amountYuan: Number(item.amountFen || 0) / 100,
+      statusRaw: String(item.status || ""),
+      status: formatInvoiceStatus(item.status)
     }));
   } else if (resourceKey.value === "plans") {
     rows = items.map(plan => ({
@@ -743,6 +786,11 @@ const filteredRecords = computed(() => {
     return records.value;
   }
 
+  // 用户列表筛选（关键词、会员状态、注册日期）已由接口处理
+  if (resourceKey.value === "users" && shouldUseApi()) {
+    return records.value;
+  }
+
   const word = keyword.value.trim().toLowerCase();
   const predicate = (item: Record<string, any>) => {
     const matchesWord =
@@ -753,7 +801,11 @@ const filteredRecords = computed(() => {
           .includes(word)
       );
     return (
-      matchesWord && (!statusFilter.value || item.status === statusFilter.value)
+      matchesWord &&
+      (!statusFilter.value ||
+        item.status === statusFilter.value ||
+        item.statusRaw === statusFilter.value ||
+        item.subscriptionStatus === statusFilter.value)
     );
   };
 
@@ -833,6 +885,12 @@ watch(userDateRange, () => {
   loadRemote();
 });
 
+watch(statusFilter, () => {
+  if (resourceKey.value !== "users" || !shouldUseApi()) return;
+  currentPage.value = 1;
+  loadRemote();
+});
+
 watch(modelDateRange, () => {
   if (resourceKey.value !== "models" || !shouldUseApi()) return;
   currentPage.value = 1;
@@ -847,9 +905,15 @@ watch([currentPage, pageSize], () => {
 watchDebounced(
   keyword,
   () => {
-    if (!useServerFilters() && !useServerPagination()) return;
-    currentPage.value = 1;
-    loadRemote();
+    if (useServerFilters() || useServerPagination()) {
+      currentPage.value = 1;
+      loadRemote();
+      return;
+    }
+    if (resourceKey.value === "users" && shouldUseApi()) {
+      currentPage.value = 1;
+      loadRemote();
+    }
   },
   { debounce: 400 }
 );
@@ -1371,6 +1435,29 @@ watch(userProjectsPage, () => {
   loadUserProjects();
 });
 
+const openUserProjectCanvas = async (project: Record<string, any>) => {
+  const userId = String(current.value?.id || "");
+  const projectId = String(project.id ?? project.projectId ?? "");
+  if (!userId || !projectId) return;
+
+  projectCanvasTitle.value = String(project.title || "项目画布");
+  projectCanvasVisible.value = true;
+  projectCanvasLoading.value = true;
+  projectCanvasPayload.value = null;
+
+  try {
+    projectCanvasPayload.value = (await adminApi.userProjectCanvas(
+      userId,
+      projectId
+    )) as Record<string, unknown>;
+  } catch (error: any) {
+    projectCanvasVisible.value = false;
+    ElMessage.error(error?.message || "画布数据加载失败");
+  } finally {
+    projectCanvasLoading.value = false;
+  }
+};
+
 const openPoints = (row: Record<string, any>) => {
   current.value = row;
   form.adjustAmount = 1000;
@@ -1400,9 +1487,29 @@ const adjustPoints = async () => {
 const statusType = (value: string) => {
   if (["会员", "MEMBER"].includes(value)) return "success";
   if (["非会员", "NON_MEMBER"].includes(value)) return "info";
-  if (["启用", "已支付", "已开票", "PAID", "ENABLED", "ISSUED"].includes(value))
+  if (
+    [
+      "启用",
+      "已支付",
+      "已开票",
+      "有效会员",
+      "PAID",
+      "ENABLED",
+      "ISSUED"
+    ].includes(value)
+  )
     return "success";
-  if (["待支付", "待开票", "PENDING", "PAYING", "PROCESSING"].includes(value))
+  if (
+    [
+      "待支付",
+      "待开票",
+      "开票中",
+      "过期会员",
+      "PENDING",
+      "PAYING",
+      "PROCESSING"
+    ].includes(value)
+  )
     return "warning";
   if (["停用", "已取消", "REJECTED", "CANCELED", "CANCELLED"].includes(value))
     return "danger";
@@ -1897,7 +2004,7 @@ const uploadFieldFile = async (field: ResourceField, file: File) => {
         <el-select
           v-model="statusFilter"
           clearable
-          placeholder="全部状态"
+          :placeholder="resourceKey === 'users' ? '会员状态' : '全部状态'"
           class="status-filter"
         >
           <el-option
@@ -2477,7 +2584,8 @@ const uploadFieldFile = async (field: ResourceField, file: File) => {
           <div
             v-for="project in userProjects"
             :key="project.id"
-            class="project-row"
+            class="project-row project-row--clickable"
+            @click="openUserProjectCanvas(project)"
           >
             <IconifyIconOnline icon="ri:folder-5-line" />
             <span>{{ project.title }}</span>
@@ -2498,6 +2606,25 @@ const uploadFieldFile = async (field: ResourceField, file: File) => {
         </div>
       </div>
     </el-drawer>
+
+    <el-dialog
+      v-model="projectCanvasVisible"
+      :title="projectCanvasTitle"
+      width="92%"
+      destroy-on-close
+      class="project-canvas-dialog"
+    >
+      <div
+        v-if="projectCanvasLoading"
+        v-loading="true"
+        class="project-canvas-loading"
+      />
+      <UserProjectCanvasPreview
+        v-else-if="projectCanvasPayload"
+        :payload="projectCanvasPayload"
+      />
+      <el-empty v-else description="暂无画布数据" />
+    </el-dialog>
 
     <el-dialog v-model="pointsVisible" title="调整用户积分" width="460px">
       <el-alert
@@ -2790,6 +2917,18 @@ h1 {
   border-bottom: 1px solid #f0eef5;
 }
 
+.project-row--clickable {
+  padding: 13px 8px;
+  margin: 0 -8px;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: background 0.15s ease;
+
+  &:hover {
+    background: #f5f3ff;
+  }
+}
+
 .project-row small {
   margin-left: auto;
   color: #a0a2aa;
@@ -2802,6 +2941,39 @@ h1 {
 .project-pagination {
   justify-content: center;
   margin-top: 12px;
+}
+
+.project-canvas-loading {
+  height: 100%;
+  min-height: 320px;
+}
+
+.project-canvas-dialog :deep(.el-dialog) {
+  display: flex;
+  flex-direction: column;
+  height: 800px;
+  min-height: 800px;
+  max-height: 800px;
+  margin-top: calc((100vh - 800px) / 2);
+  margin-bottom: 0;
+}
+
+.project-canvas-dialog :deep(.el-dialog__header) {
+  flex-shrink: 0;
+}
+
+.project-canvas-dialog :deep(.el-dialog__body) {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  padding-top: 8px;
+  overflow: hidden;
+}
+
+.project-canvas-dialog :deep(.user-project-canvas-preview) {
+  flex: 1;
+  min-height: 0;
 }
 
 .points-form {

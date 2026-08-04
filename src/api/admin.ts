@@ -164,7 +164,7 @@ export const adminApi = {
       page?: number;
       pageSize?: number;
       keyword?: string;
-      status?: string;
+      subscriptionStatus?: string;
       startDate?: string;
       endDate?: string;
     } = {}
@@ -208,6 +208,19 @@ export const adminApi = {
         params
       })
     ) as Promise<AdminPage<{ id: number; title: string; updatedAt?: string }>>;
+  },
+  userProjectCanvas(userId: string, projectId: string) {
+    return unwrap(
+      client.get(
+        `/admin/v1/users/${encodeURIComponent(userId)}/projects/${encodeURIComponent(projectId)}/canvas`
+      )
+    ) as Promise<{
+      projectId?: string;
+      revision?: number;
+      updatedAt?: string;
+      canvas?: Record<string, unknown>;
+      canvasData?: Record<string, unknown>;
+    }>;
   },
   orders(
     params: {
