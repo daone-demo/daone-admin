@@ -245,7 +245,7 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
       { key: "orderNo", label: "关联订单" },
       { key: "invoiceType", label: "类型" },
       { key: "amountYuan", label: "金额（元）" },
-      { key: "appliedAt", label: "申请时间" },
+      { key: "createdAt", label: "申请时间" },
       { key: "status", label: "状态", width: 110 }
     ],
     records: [
@@ -258,7 +258,7 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
         invoiceType: "VAT_NORMAL",
         amountFen: 599900,
         amountYuan: 5999,
-        appliedAt: "2026-06-18 10:21",
+        createdAt: "2026-06-18 10:21",
         status: "待开票"
       },
       {
@@ -270,7 +270,7 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
         invoiceType: "VAT_SPECIAL",
         amountFen: 1299900,
         amountYuan: 12999,
-        appliedAt: "2026-06-17 15:08",
+        createdAt: "2026-06-17 15:08",
         status: "开票中"
       },
       {
@@ -282,7 +282,7 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
         invoiceType: "VAT_NORMAL",
         amountFen: 899900,
         amountYuan: 8999,
-        appliedAt: "2026-06-16 13:50",
+        createdAt: "2026-06-16 13:50",
         status: "已开票"
       }
     ]
