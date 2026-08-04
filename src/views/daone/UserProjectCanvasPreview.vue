@@ -130,8 +130,9 @@ function bindLongPressPan() {
   const graphContainer = graph.container;
   let pressButtonDown = false;
   let pressStart: { x: number; y: number } | null = null;
-  let longPressPanActive = false;
-  let panOrigin = { tx: 0, ty: 0, x: 0, y: 0 };
+  let panActive = false;
+  let panLast = { x: 0, y: 0 };
+  let documentListenersBound = false;
 
   const clearTimer = () => {
     if (longPressTimer) {
@@ -140,97 +141,103 @@ function bindLongPressPan() {
     }
   };
 
-  const clearPressWatch = () => {
+  const unbindDocumentListeners = () => {
+    if (!documentListenersBound) return;
+    documentListenersBound = false;
+    document.removeEventListener("mousemove", onDocumentMouseMove, true);
+    document.removeEventListener("mouseup", onDocumentPointerEnd, true);
+    document.removeEventListener("pointerup", onDocumentPointerEnd, true);
+    document.removeEventListener("pointercancel", onDocumentPointerEnd, true);
+  };
+
+  const endInteraction = () => {
     clearTimer();
-    pressStart = null;
     pressButtonDown = false;
-    window.removeEventListener("mousemove", onPressMove);
-    window.removeEventListener("mouseup", onPressUp);
+    pressStart = null;
+    unbindDocumentListeners();
+    if (panActive) {
+      panActive = false;
+      graphContainer.classList.remove("is-panning");
+      graphContainer.style.cursor = "grab";
+    }
   };
 
-  const stopPan = () => {
-    if (!longPressPanActive) return;
-    longPressPanActive = false;
-    graphContainer.style.cursor = "grab";
-    window.removeEventListener("mousemove", onPanMove);
-    window.removeEventListener("mouseup", onPanUp);
+  const bindDocumentListeners = () => {
+    if (documentListenersBound) return;
+    documentListenersBound = true;
+    document.addEventListener("mousemove", onDocumentMouseMove, true);
+    document.addEventListener("mouseup", onDocumentPointerEnd, true);
+    document.addEventListener("pointerup", onDocumentPointerEnd, true);
+    document.addEventListener("pointercancel", onDocumentPointerEnd, true);
   };
 
-  const onPanMove = (event: MouseEvent) => {
-    if (!graph || !longPressPanActive) return;
-    const dx = event.clientX - panOrigin.x;
-    const dy = event.clientY - panOrigin.y;
-    graph.translate(panOrigin.tx + dx, panOrigin.ty + dy);
-  };
+  const onDocumentMouseMove = (event: MouseEvent) => {
+    if (panActive) {
+      if (!graph) return;
+      event.preventDefault();
+      const dx = event.clientX - panLast.x;
+      const dy = event.clientY - panLast.y;
+      panLast.x = event.clientX;
+      panLast.y = event.clientY;
+      graph.translateBy(dx, dy);
+      return;
+    }
 
-  const onPanUp = () => {
-    stopPan();
-    clearPressWatch();
-  };
-
-  const activateLongPressPan = () => {
-    if (!graph || !pressStart || longPressPanActive) return;
-
-    longPressPanActive = true;
-    clearTimer();
-    const translate = graph.translate();
-    panOrigin = {
-      tx: translate.tx,
-      ty: translate.ty,
-      x: pressStart.x,
-      y: pressStart.y
-    };
-    graphContainer.style.cursor = "grabbing";
-    window.addEventListener("mousemove", onPanMove);
-    window.addEventListener("mouseup", onPanUp);
-  };
-
-  const onPressMove = (event: MouseEvent) => {
-    if (!pressStart || longPressPanActive) return;
+    if (!pressStart || !pressButtonDown) return;
     const dx = event.clientX - pressStart.x;
     const dy = event.clientY - pressStart.y;
     if (
       dx * dx + dy * dy >
       LONG_PRESS_MOVE_CANCEL_PX * LONG_PRESS_MOVE_CANCEL_PX
     ) {
-      clearPressWatch();
+      endInteraction();
     }
   };
 
-  const onPressUp = () => {
-    pressButtonDown = false;
-    if (longPressPanActive) {
-      stopPan();
+  const onDocumentPointerEnd = (event: MouseEvent | PointerEvent) => {
+    if ("button" in event && event.button !== 0) return;
+    endInteraction();
+  };
+
+  const activatePan = () => {
+    if (!graph || !pressStart || !pressButtonDown || panActive) return;
+
+    panActive = true;
+    panLast = { x: pressStart.x, y: pressStart.y };
+    graphContainer.classList.add("is-panning");
+    graphContainer.style.cursor = "grabbing";
+  };
+
+  const onContainerMouseDown = (event: MouseEvent) => {
+    if (event.button !== 0) return;
+    if (event.detail >= 2) return;
+    if (panActive) return;
+    if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey)
       return;
-    }
-    clearPressWatch();
-  };
-
-  const onBlankMouseDown = ({ e }: { e: MouseEvent }) => {
-    if (e.button !== 0) return;
-    if (e.detail >= 2) return;
-    if (longPressPanActive) return;
 
     pressButtonDown = true;
-    pressStart = { x: e.clientX, y: e.clientY };
+    pressStart = { x: event.clientX, y: event.clientY };
     clearTimer();
+    bindDocumentListeners();
     longPressTimer = setTimeout(() => {
       longPressTimer = null;
-      if (!pressStart || !pressButtonDown) return;
-      activateLongPressPan();
+      activatePan();
     }, LONG_PRESS_MS);
-
-    window.addEventListener("mousemove", onPressMove);
-    window.addEventListener("mouseup", onPressUp);
   };
 
-  graph.on("blank:mousedown", onBlankMouseDown);
+  const onWindowBlur = () => {
+    endInteraction();
+  };
+
+  graphContainer.addEventListener("mousedown", onContainerMouseDown, true);
+  window.addEventListener("blur", onWindowBlur);
   graphContainer.style.cursor = "grab";
 
   cleanupPanListeners = () => {
-    stopPan();
-    clearPressWatch();
-    graph?.off("blank:mousedown", onBlankMouseDown);
+    endInteraction();
+    window.removeEventListener("blur", onWindowBlur);
+    graphContainer.removeEventListener("mousedown", onContainerMouseDown, true);
+    graphContainer.classList.remove("is-panning");
     graphContainer.style.cursor = "";
   };
 }
@@ -278,6 +285,9 @@ onBeforeUnmount(() => {
 <template>
   <div class="user-project-canvas-preview">
     <div class="user-project-canvas-preview__toolbar">
+      <span class="user-project-canvas-preview__hint"
+        >长按鼠标拖拽移动画布</span
+      >
       <div class="user-project-canvas-preview__zoom">
         <el-button size="small" @click="zoomBy(-0.1)">−</el-button>
         <span>{{ zoomPercent }}%</span>
@@ -309,6 +319,11 @@ onBeforeUnmount(() => {
   justify-content: space-between;
 }
 
+.user-project-canvas-preview__hint {
+  font-size: 13px;
+  color: #6b7280;
+}
+
 .user-project-canvas-preview__zoom {
   display: flex;
   gap: 8px;
@@ -327,5 +342,18 @@ onBeforeUnmount(() => {
   background: #f9fafb;
   border: 1px solid #e5e7eb;
   border-radius: 12px;
+
+  &.is-panning,
+  &.is-panning * {
+    cursor: grabbing !important;
+    user-select: none;
+  }
+
+  :deep(image),
+  :deep(img) {
+    pointer-events: none;
+    user-select: none;
+    -webkit-user-drag: none;
+  }
 }
 </style>
