@@ -332,17 +332,41 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
     hideMetrics: true,
     allowDelete: false,
     allowStatus: true,
+    tableFullWidth: true,
     createText: "新增套餐",
-    searchable: ["name", "code"],
+    searchPlaceholder: "搜索套餐名称、编码或描述",
+    searchable: [
+      "planName",
+      "planCode",
+      "description",
+      "benefitSummary",
+      "priceSummary"
+    ],
     fields: [
-      { key: "planName", label: "套餐名称" },
-      { key: "planCode", label: "套餐编码" },
-      { key: "benefitsText", label: "套餐权益（每行一项）", type: "textarea" }
+      { key: "planCode", label: "套餐编码", required: true, createOnly: true },
+      { key: "planName", label: "套餐名称", required: true },
+      { key: "description", label: "套餐描述", type: "textarea" },
+      { key: "benefitsText", label: "套餐权益（每行一项）", type: "textarea" },
+      { key: "priceCode", label: "价格编码", required: true },
+      {
+        key: "cycleUnit",
+        label: "计费周期",
+        type: "select",
+        options: ["MONTH", "YEAR"],
+        required: true
+      },
+      { key: "cycleCount", label: "周期数量", type: "number" },
+      { key: "priceYuan", label: "售价（元）", type: "number", required: true },
+      { key: "originalPriceYuan", label: "原价（元）", type: "number" },
+      { key: "grantPoints", label: "赠送积分", type: "number", required: true }
     ],
     columns: [
-      { key: "planName", label: "套餐" },
-      { key: "planCode", label: "套餐编码" },
-      { key: "benefitSummary", label: "套餐权益" },
+      { key: "planName", label: "套餐", minWidth: 160 },
+      { key: "planCode", label: "套餐编码", minWidth: 120 },
+      { key: "description", label: "套餐描述", minWidth: 180 },
+      { key: "priceSummary", label: "计费价格", minWidth: 150 },
+      { key: "grantPoints", label: "赠送积分", minWidth: 100 },
+      { key: "benefitSummary", label: "套餐权益", minWidth: 240 },
       { key: "status", label: "状态", width: 100 }
     ],
     records: []

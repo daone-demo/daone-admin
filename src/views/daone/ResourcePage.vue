@@ -489,6 +489,36 @@ const fetchPaginatedResource = async (
   return all;
 };
 
+const PLAN_CYCLE_UNIT_LABEL: Record<string, string> = {
+  MONTH: "月",
+  YEAR: "年",
+  DAY: "天"
+};
+
+const formatPlanCycleLabel = (cycleCount: number, cycleUnit: string) => {
+  const unit = PLAN_CYCLE_UNIT_LABEL[cycleUnit] || cycleUnit;
+  const count = Number(cycleCount || 1);
+  return count > 1 ? `${count}${unit}` : unit;
+};
+
+const buildPlanPriceItems = (prices: any[] = []) =>
+  (prices || []).map(price => {
+    const yuan = Number(price.priceFen || 0) / 100;
+    const originalYuan = Number(price.originalPriceFen || 0) / 100;
+    const cycle = formatPlanCycleLabel(
+      Number(price.cycleCount || 1),
+      String(price.cycleUnit || "MONTH")
+    );
+    return {
+      priceCode: String(price.priceCode || ""),
+      priceText: `¥${yuan.toLocaleString()}/${cycle}`,
+      originalText:
+        originalYuan > yuan ? `¥${originalYuan.toLocaleString()}` : "",
+      grantPoints: Number(price.grantPoints || 0),
+      status: price.status === "ENABLED" ? "启用" : "停用"
+    };
+  });
+
 const normalizeRemoteRows = (items: any[]) => {
   const normalizeStatus = (value: string) =>
     value === "DISABLED" ? "停用" : value === "ENABLED" ? "启用" : value;
@@ -529,13 +559,28 @@ const normalizeRemoteRows = (items: any[]) => {
       status: formatInvoiceStatus(item.status)
     }));
   } else if (resourceKey.value === "plans") {
-    rows = items.map(plan => ({
-      ...plan,
-      id: plan.id || plan.planCode,
-      benefitsText: (plan.benefits || []).join("\n"),
-      benefitSummary: (plan.benefits || []).join("；"),
-      status: plan.status === "ENABLED" ? "启用" : "停用"
-    }));
+    rows = items.map(plan => {
+      const prices = plan.prices || [];
+      const firstPrice = prices[0] || {};
+      const priceItems = buildPlanPriceItems(prices);
+      return {
+        ...plan,
+        id: plan.id || plan.planCode,
+        description: String(plan.description || ""),
+        benefitsText: (plan.benefits || []).join("\n"),
+        benefitSummary: (plan.benefits || []).join("；"),
+        benefitList: plan.benefits || [],
+        status: plan.status === "ENABLED" ? "启用" : "停用",
+        priceCode: String(firstPrice.priceCode || ""),
+        cycleUnit: String(firstPrice.cycleUnit || "MONTH"),
+        cycleCount: Number(firstPrice.cycleCount || 1),
+        priceYuan: Number(firstPrice.priceFen || 0) / 100,
+        originalPriceYuan: Number(firstPrice.originalPriceFen || 0) / 100,
+        grantPoints: Number(firstPrice.grantPoints || 0),
+        priceSummary: priceItems.map(item => item.priceText).join("、"),
+        priceItems
+      };
+    });
   } else if (resourceKey.value === "models") {
     rows = items.map(item => ({
       ...item,
@@ -972,6 +1017,17 @@ const editorFields = computed(() => {
 
 const isTableFullWidth = computed(() => Boolean(config.value?.tableFullWidth));
 
+const detailColumns = computed(() => {
+  const columns = config.value?.columns || [];
+  if (resourceKey.value === "plans") {
+    return columns.filter(
+      column =>
+        !["priceSummary", "benefitSummary", "grantPoints"].includes(column.key)
+    );
+  }
+  return columns;
+});
+
 const activeCount = computed(
   () =>
     records.value.filter(item =>
@@ -1010,29 +1066,40 @@ const openEditor = async (row?: Record<string, any>) => {
       }
     ];
   }
+  if (resourceKey.value === "plans" && !row) {
+    form.cycleUnit = "MONTH";
+    form.cycleCount = 1;
+  }
   dialogVisible.value = true;
 };
 
 const toApiPayload = () => {
   if (resourceKey.value === "plans") {
-    const mapPlanPrices = (prices: any[]) =>
-      (prices || []).map(price => ({
-        priceCode: String(price.priceCode || ""),
-        cycleUnit: String(price.cycleUnit || "MONTH"),
-        cycleCount: Number(price.cycleCount || 1),
-        priceFen: Number(price.priceFen || 0),
-        originalPriceFen: Number(price.originalPriceFen || 0),
-        grantPoints: Number(price.grantPoints || 0)
-      }));
-
-    return {
-      planCode: form.planCode,
-      planName: form.planName,
-      benefits: String(form.benefitsText || "")
-        .split("\n")
-        .filter(Boolean),
-      prices: mapPlanPrices(editingId.value ? current.value?.prices || [] : [])
+    const benefitsText = String(form.benefitsText || "");
+    const payload: Record<string, any> = {
+      attributes: current.value?.attributes || {},
+      planCode: String(form.planCode || "").trim(),
+      planName: String(form.planName || "").trim(),
+      description: String(form.description || "").trim(),
+      benefits: benefitsText.split("\n").filter(Boolean),
+      benefitsText,
+      prices: [
+        {
+          priceCode: String(form.priceCode || "").trim(),
+          cycleUnit: String(form.cycleUnit || "MONTH"),
+          cycleCount: Number(form.cycleCount || 1),
+          priceFen: Math.round(Number(form.priceYuan || 0) * 100),
+          originalPriceFen: Math.round(
+            Number(form.originalPriceYuan || 0) * 100
+          ),
+          grantPoints: Number(form.grantPoints || 0)
+        }
+      ]
     };
+    if (!editingId.value) {
+      payload.status = "ENABLED";
+    }
+    return payload;
   }
   if (resourceKey.value === "models") {
     const parameters =
@@ -2271,6 +2338,51 @@ const uploadFieldFile = async (field: ResourceField, file: File) => {
             >
               ¥{{ Number(row[column.key] || 0).toLocaleString() }}
             </span>
+            <div
+              v-else-if="
+                column.key === 'priceSummary' && resourceKey === 'plans'
+              "
+              class="plan-price-cell"
+            >
+              <div
+                v-for="(item, index) in row.priceItems || []"
+                :key="`${item.priceCode}-${index}`"
+                class="plan-price-item"
+              >
+                <span class="money">{{ item.priceText }}</span>
+                <small v-if="item.originalText" class="plan-original-price">
+                  {{ item.originalText }}
+                </small>
+                <small v-if="item.priceCode" class="plan-price-code">
+                  {{ item.priceCode }}
+                </small>
+              </div>
+              <span v-if="!(row.priceItems || []).length">-</span>
+            </div>
+            <div
+              v-else-if="
+                column.key === 'benefitSummary' && resourceKey === 'plans'
+              "
+              class="plan-benefits-cell"
+            >
+              <el-tag
+                v-for="(benefit, index) in row.benefitList || []"
+                :key="`${benefit}-${index}`"
+                size="small"
+                effect="plain"
+                round
+              >
+                {{ benefit }}
+              </el-tag>
+              <span v-if="!(row.benefitList || []).length">-</span>
+            </div>
+            <span
+              v-else-if="column.key === 'description'"
+              class="plan-description"
+              :title="row.description"
+            >
+              {{ row.description || "-" }}
+            </span>
             <span
               v-else-if="
                 ['points', 'grantPoints', 'bonusPoints'].includes(column.key)
@@ -2680,13 +2792,17 @@ const uploadFieldFile = async (field: ResourceField, file: File) => {
           <IconifyIconOnline :icon="config.icon" />
         </div>
         <div>
-          <h3>{{ current.name || current.title || current.id }}</h3>
+          <h3>
+            {{
+              current.planName || current.name || current.title || current.id
+            }}
+          </h3>
           <p>{{ current.id }}</p>
         </div>
       </div>
       <el-descriptions :column="1" border>
         <el-descriptions-item
-          v-for="column in config.columns"
+          v-for="column in detailColumns"
           :key="column.key"
           :label="column.label"
         >
@@ -2697,6 +2813,58 @@ const uploadFieldFile = async (field: ResourceField, file: File) => {
           }}
         </el-descriptions-item>
       </el-descriptions>
+      <div v-if="resourceKey === 'plans'" class="detail-section">
+        <h4>计费方案</h4>
+        <div
+          v-if="(current.priceItems || []).length"
+          class="plan-detail-prices"
+        >
+          <div
+            v-for="(item, index) in current.priceItems"
+            :key="`${item.priceCode}-${index}`"
+            class="plan-price-detail"
+          >
+            <div class="plan-price-detail-main">
+              <span class="money">{{ item.priceText }}</span>
+              <small v-if="item.originalText" class="plan-original-price">
+                原价 {{ item.originalText }}
+              </small>
+            </div>
+            <div class="plan-price-detail-meta">
+              <span v-if="item.priceCode">编码 {{ item.priceCode }}</span>
+              <span
+                >赠送
+                {{ Number(item.grantPoints || 0).toLocaleString() }} 积分</span
+              >
+              <el-tag
+                size="small"
+                effect="light"
+                round
+                :type="statusType(item.status)"
+              >
+                {{ item.status }}
+              </el-tag>
+            </div>
+          </div>
+        </div>
+        <el-empty v-else description="暂无计费方案" :image-size="64" />
+        <h4>套餐权益</h4>
+        <div
+          v-if="(current.benefitList || []).length"
+          class="plan-benefits-cell"
+        >
+          <el-tag
+            v-for="(benefit, index) in current.benefitList"
+            :key="`${benefit}-${index}`"
+            size="small"
+            effect="plain"
+            round
+          >
+            {{ benefit }}
+          </el-tag>
+        </div>
+        <el-empty v-else description="暂无权益说明" :image-size="64" />
+      </div>
       <div v-if="resourceKey === 'users'" class="detail-section">
         <h4>最近项目</h4>
         <div v-loading="userProjectsLoading" class="project-list">
@@ -3016,6 +3184,76 @@ h1 {
 .money {
   font-weight: 700;
   color: #2d3436;
+}
+
+.plan-description {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-height: 1.5;
+  color: #5f6472;
+}
+
+.plan-price-cell,
+.plan-price-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.plan-price-item,
+.plan-price-detail-main,
+.plan-price-detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.plan-original-price {
+  color: #a0a3ad;
+  text-decoration: line-through;
+}
+
+.plan-price-code {
+  padding: 1px 6px;
+  font-size: 11px;
+  color: #7a7d8b;
+  background: #f4f3f8;
+  border-radius: 999px;
+}
+
+.plan-benefits-cell {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.plan-detail-prices {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.plan-price-detail {
+  padding: 12px 14px;
+  background: #faf9fc;
+  border: 1px solid #efeef5;
+  border-radius: 12px;
+}
+
+.plan-price-detail-meta {
+  margin-top: 2px;
+  font-size: 12px;
+  color: #7a7d8b;
+}
+
+.detail-section h4 {
+  margin: 0 0 12px;
+  font-size: 14px;
+  color: #1f2430;
 }
 
 .detail-head {
