@@ -61,7 +61,7 @@ export interface DashboardResponse {
 }
 
 const client = axios.create({
-  baseURL: "https://api.dev.daoneai.com/api",
+  baseURL: "https://api.daoneai.com/api",
   timeout: 12000,
   headers: { "Content-Type": "application/json" }
 });
