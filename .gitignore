@@ -18,7 +18,6 @@ cos-credentials*.json
 report.html
 vite.config.*.timestamp*
 
-yarn.lock
 npm-debug.log*
 .pnpm-error.log*
 .pnpm-debug.log
