@@ -41,8 +41,8 @@ class StorageProxy implements ProxyStorage {
   public async getItem<T>(k: string): Promise<T> {
     return new Promise((resolve, reject) => {
       this.storage
-        .getItem(k)
-        .then((value: ExpiresData<T>) => {
+        .getItem<ExpiresData<T>>(k)
+        .then(value => {
           value && (value.expires > new Date().getTime() || value.expires === 0)
             ? resolve(value.data)
             : resolve(null);

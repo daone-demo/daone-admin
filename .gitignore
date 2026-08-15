@@ -4,6 +4,17 @@ dist
 dist-ssr
 *.local
 .eslintcache
+
+# 本地环境与凭证：严禁提交，也不要随交付包外发
+.env.local
+.env.*.local
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.json
+cos-credentials*.json
+
 report.html
 vite.config.*.timestamp*
 

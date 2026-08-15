@@ -4,7 +4,7 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "strict": false,
-    "strictFunctionTypes": false,
+    "strictFunctionTypes": true,
     "noImplicitThis": true,
     "jsx": "preserve",
     "importHelpers": true,

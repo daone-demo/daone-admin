@@ -1,0 +1,58 @@
+.daone-page {
+  width: 100%;
+  min-height: 100%;
+  color: #1f2430;
+}
+
+.daone-page .table-card {
+  width: 100%;
+  padding: 18px;
+  background: #fff;
+  border: 1px solid #ebeaf2;
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgb(34 31 52 / 4%);
+}
+
+.resource-error-state {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 16px;
+
+  .el-alert {
+    flex: 1;
+  }
+}
+
+.project-canvas-loading {
+  height: 100%;
+  min-height: 320px;
+}
+
+.project-canvas-dialog {
+  display: flex;
+  flex-direction: column;
+  height: 800px;
+  min-height: 800px;
+  max-height: 800px;
+  margin-top: calc((100vh - 800px) / 2);
+  margin-bottom: 0;
+}
+
+.project-canvas-dialog .el-dialog__header {
+  flex-shrink: 0;
+}
+
+.project-canvas-dialog .el-dialog__body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  padding-top: 8px;
+  overflow: hidden;
+}
+
+.project-canvas-dialog .user-project-canvas-preview {
+  flex: 1;
+  min-height: 0;
+}

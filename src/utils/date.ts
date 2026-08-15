@@ -15,8 +15,8 @@ export const formatDateTime = (value: unknown) => {
   return parsed.format(DATE_TIME_FORMAT);
 };
 
-export const formatRecordDates = <T extends Record<string, any>>(record: T) => {
-  const next = { ...record };
+export const formatRecordDates = (record: Record<string, unknown>) => {
+  const next: Record<string, unknown> = { ...record };
 
   Object.keys(next).forEach(key => {
     if (!isDateTimeField(key)) return;

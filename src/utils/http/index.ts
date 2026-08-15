@@ -152,17 +152,8 @@ class PureHttp {
       ...axiosConfig
     } as PureHttpRequestConfig;
 
-    // 单独处理自定义请求/响应回调
-    return new Promise((resolve, reject) => {
-      PureHttp.axiosInstance
-        .request(config)
-        .then((response: undefined) => {
-          resolve(response);
-        })
-        .catch(error => {
-          reject(error);
-        });
-    });
+    // 响应拦截器会返回 response.data，第二个泛型声明最终 Promise 的返回值
+    return PureHttp.axiosInstance.request<T, T>(config);
   }
 
   /** 单独抽离的`post`工具函数 */
