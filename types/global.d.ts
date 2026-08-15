@@ -70,6 +70,10 @@ declare global {
     VITE_CDN: boolean;
     VITE_HIDE_HOME: string;
     VITE_COMPRESSION: ViteCompression;
+    /** 浏览器实际请求的 API 前缀：本地为 /api，线上为完整域名 */
+    VITE_DAONE_API_BASE_URL: string;
+    /** 本地 Vite proxy 上游地址 */
+    VITE_API_BASE_HOST: string;
   }
 
   /**

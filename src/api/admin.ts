@@ -61,7 +61,10 @@ export interface DashboardResponse {
 }
 
 const client = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_HOST,
+  // 本地开发用相对路径走 Vite proxy；线上打包注入完整 API 地址直连
+  baseURL:
+    import.meta.env.VITE_DAONE_API_BASE_URL ||
+    import.meta.env.VITE_API_BASE_HOST,
   timeout: 12000,
   headers: { "Content-Type": "application/json" }
 });
