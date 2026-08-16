@@ -75,8 +75,8 @@ export default ({ mode }: ConfigEnv): UserConfigExport => {
       // https://cn.vitejs.dev/guide/build.html#browser-compatibility
       target: "es2015",
       sourcemap: false,
-      // 消除打包大小超过500kb警告
-      chunkSizeWarningLimit: 4000,
+      // 收紧告警阈值，暴露超大 chunk；配合 manualChunks 与画布预览懒加载
+      chunkSizeWarningLimit: 800,
       rollupOptions: {
         input: {
           index: pathResolve("./index.html", import.meta.url)
@@ -85,7 +85,30 @@ export default ({ mode }: ConfigEnv): UserConfigExport => {
         output: {
           chunkFileNames: "static/js/[name]-[hash].js",
           entryFileNames: "static/js/[name]-[hash].js",
-          assetFileNames: "static/[ext]/[name]-[hash].[ext]"
+          assetFileNames: "static/[ext]/[name]-[hash].[ext]",
+          manualChunks(id) {
+            if (!id.includes("node_modules")) return;
+            if (id.includes("/@antv/x6") || id.includes("/x6-html-shape/")) {
+              return "vendor-x6";
+            }
+            if (
+              id.includes("/element-plus/") ||
+              id.includes("/@element-plus/")
+            ) {
+              return "vendor-element-plus";
+            }
+            if (
+              id.includes("/vue/") ||
+              id.includes("/vue-router/") ||
+              id.includes("/pinia/") ||
+              id.includes("/@vue/")
+            ) {
+              return "vendor-vue";
+            }
+            if (id.includes("/echarts/") || id.includes("/zrender/")) {
+              return "vendor-echarts";
+            }
+          }
         }
       }
     },

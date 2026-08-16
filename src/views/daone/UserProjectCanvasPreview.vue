@@ -7,7 +7,6 @@ import {
   ref,
   watch
 } from "vue";
-import { Graph } from "@antv/x6";
 import {
   extractCanvasPreviewSnapshot,
   type CanvasPreviewSnapshot
@@ -27,7 +26,7 @@ const containerRef = ref<HTMLElement | null>(null);
 const zoomPercent = ref(100);
 const snapshot = computed(() => extractCanvasPreviewSnapshot(props.payload));
 
-let graph: Graph | null = null;
+let graph: import("@antv/x6").Graph | null = null;
 let longPressTimer: ReturnType<typeof setTimeout> | null = null;
 let cleanupPanListeners: (() => void) | null = null;
 
@@ -83,6 +82,9 @@ async function mountGraph() {
   const width = container.clientWidth;
   const height =
     container.clientHeight > 0 ? container.clientHeight : STAGE_HEIGHT;
+
+  // 打开预览时再拉取 X6，避免 ResourcePage 同步依赖图编辑器
+  const { Graph } = await import("@antv/x6");
 
   graph = new Graph({
     container,

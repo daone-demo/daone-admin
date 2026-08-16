@@ -28,17 +28,19 @@ pnpm dev:test     # 测试上游
 主配置仍为 `strict: false`（兼容上游模板遗留代码）。Daone 核心链路通过 `tsconfig.daone-strict.json` 单独开启 `strict: true`，由 `pnpm typecheck:strict` / `pnpm typecheck` 强制执行。当前覆盖：
 
 - `src/api/**`（含 `admin.ts` 响应与鉴权接口）
-- `src/utils/auth.ts`、`submitLock.ts`
+- `src/utils/auth.ts`、`submitLock.ts`、`print.ts`、`date.ts`
+- `src/utils/http/**`（通用请求层）
 - `src/views/login/utils/rule.ts`
 - `src/views/daone/**/*.ts`（含 `useResourceList` / `useResourceCrud` 及资源页纯逻辑）
 
 ### 构建与检查
 
 ```bash
-pnpm build:prod    # --mode production + API 基址断言
+pnpm build:prod    # --mode production + API 基址断言 + gzip 体积预算
 pnpm test          # 资源列表竞态 / 请求合并等回归
 pnpm lint:check    # ESLint + Prettier --check + Stylelint（CI 用）
 pnpm lint          # Prettier/Stylelint 写文件修复
+pnpm check:bundle-budget  # 对 dist 做 gzip 体积预算（build:prod 已串入）
 ```
 
 ### 发布 Tag

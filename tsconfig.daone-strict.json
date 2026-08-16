@@ -11,6 +11,8 @@
     "src/utils/auth.ts",
     "src/utils/submitLock.ts",
     "src/utils/print.ts",
+    "src/utils/date.ts",
+    "src/utils/http/**/*.ts",
     "src/views/login/utils/rule.ts",
     "src/views/daone/**/*.ts"
   ],

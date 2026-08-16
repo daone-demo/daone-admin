@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import { computed, reactive } from "vue";
+import { computed, defineAsyncComponent, reactive } from "vue";
 import { useRoute } from "vue-router";
 import { formatDateTime, isDateTimeField } from "@/utils/date";
-import UserProjectCanvasPreview from "./UserProjectCanvasPreview.vue";
 import ResourcePageHero from "./resource-page/components/ResourcePageHero.vue";
 import ResourceToolbar from "./resource-page/components/ResourceToolbar.vue";
 import ResourceTable from "./resource-page/components/ResourceTable.vue";
@@ -23,6 +22,11 @@ import { useBatchMediaUpload } from "./resource-page/useBatchMediaUpload";
 import { useResourceCrud } from "./resource-page/useResourceCrud";
 import { useResourceList } from "./resource-page/useResourceList";
 import "./resource-page/styles/resource-page.scss";
+
+/** X6 画布预览仅在打开项目画布时加载 */
+const UserProjectCanvasPreview = defineAsyncComponent(
+  () => import("./UserProjectCanvasPreview.vue")
+);
 
 defineOptions({ name: "DaoneResourcePage" });
 
