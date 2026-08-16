@@ -29,6 +29,8 @@ import {
   normalizeList,
   normalizeRemoteRows
 } from "./useResourceNormalize";
+import { createLatestRequestTracker } from "./latestRequestTracker";
+import { createCoalescedInvoke } from "./coalescedInvoke";
 
 export interface UseResourceListOptions {
   resourceKey: ComputedRef<string> | Ref<string>;
@@ -269,6 +271,8 @@ export const useResourceList = (options: UseResourceListOptions) => {
     tableRef.value?.clearSelection?.();
   };
 
+  const loadRemoteTracker = createLatestRequestTracker();
+
   const loadRemote = async (loadOptions: { resetFilters?: boolean } = {}) => {
     if (loadOptions.resetFilters) {
       resetFilters();
@@ -277,32 +281,42 @@ export const useResourceList = (options: UseResourceListOptions) => {
     if (!ensureAdminAuthenticated()) {
       return;
     }
-    if (!config.value?.apiResource) {
+    // 请求开始时快照资源与配置，响应仅在“仍是最后一次请求且资源未切换”时生效，
+    // 防止慢返回的旧资源响应覆盖新资源的数据（A→B 乱序返回）
+    const requestedResourceKey = resourceKey.value;
+    const requestedConfig = config.value;
+    if (!requestedConfig?.apiResource) {
       records.value = [];
       remoteTotal.value = 0;
       apiError.value = "当前资源未配置管理接口";
       ElMessage.error(apiError.value);
       return;
     }
+    const isCurrent = loadRemoteTracker.begin();
+    const isStale = () =>
+      !isCurrent() || resourceKey.value !== requestedResourceKey;
     loading.value = true;
     try {
       let items: any[] = [];
-      const apiResource = config.value.apiResource;
+      let nextRemoteTotal: number | null = null;
+      const apiResource = requestedConfig.apiResource;
       if (apiResource === "workflows") {
         items = await fetchPaginatedResource(params =>
           adminApi.workflows(params)
         );
       } else if (apiResource === "users") {
+        const userParams = buildUserQueryParams();
         items = await fetchPaginatedResource(params =>
-          adminApi.users({ ...buildUserQueryParams(), ...params })
+          adminApi.users({ ...userParams, ...params })
         );
       } else if (apiResource === "invoices") {
         items = await fetchPaginatedResource(params =>
           adminApi.invoices(params)
         );
       } else if (apiResource === "orders") {
+        const orderParams = buildOrderQueryParams();
         items = await fetchPaginatedResource(params =>
-          adminApi.orders({ ...buildOrderQueryParams(), ...params })
+          adminApi.orders({ ...orderParams, ...params })
         );
       } else if (apiResource === "plans") {
         items = normalizeList(await adminApi.plans());
@@ -317,14 +331,15 @@ export const useResourceList = (options: UseResourceListOptions) => {
           await adminApi.inspirations(buildInspirationQueryParams())
         );
       } else if (apiResource === "materials") {
+        const materialParams = buildMaterialQueryParams();
         items = await fetchPaginatedResource(params =>
-          adminApi.materials({ ...buildMaterialQueryParams(), ...params })
+          adminApi.materials({ ...materialParams, ...params })
         );
       } else if (apiResource === "materialCategories") {
         items = await loadMaterialCategoryItems();
       } else if (apiResource === "categories") {
-        const scope = config.value?.categoryScope;
-        if (config.value?.serverPagination) {
+        const scope = requestedConfig.categoryScope;
+        if (requestedConfig.serverPagination) {
           const payload = await adminApi.categories({
             ...buildCategoryQueryParams(),
             ...(scope ? { scope } : {}),
@@ -332,7 +347,7 @@ export const useResourceList = (options: UseResourceListOptions) => {
             pageSize: pageSize.value
           });
           const normalizedItems = normalizeList(payload);
-          remoteTotal.value = Number(
+          nextRemoteTotal = Number(
             !Array.isArray(payload) &&
               typeof payload === "object" &&
               payload !== null &&
@@ -348,26 +363,35 @@ export const useResourceList = (options: UseResourceListOptions) => {
               ...(scope ? { scope } : {})
             })
           );
-          remoteTotal.value = items.length;
+          nextRemoteTotal = items.length;
         }
       }
-      records.value = normalizeRemoteRows(items, resourceKey.value);
+      if (isStale()) return;
+      if (nextRemoteTotal !== null) {
+        remoteTotal.value = nextRemoteTotal;
+      }
+      records.value = normalizeRemoteRows(items, requestedResourceKey);
     } catch (error: any) {
+      if (isStale()) return;
       records.value = [];
       remoteTotal.value = 0;
       apiError.value = error?.message || "管理接口暂不可用";
       ElMessage.error(apiError.value);
     } finally {
-      loading.value = false;
-      if (isContentListResource.value) {
-        if (options.clearTableSelection) {
-          options.clearTableSelection();
-        } else {
-          clearTableSelection();
+      // 旧请求不得清掉新请求的 loading，也不得触发新资源的选中清理
+      if (!isStale()) {
+        loading.value = false;
+        if (isContentListResource.value) {
+          if (options.clearTableSelection) {
+            options.clearTableSelection();
+          } else {
+            clearTableSelection();
+          }
         }
       }
     }
-    if (resourceKey.value === "categories") {
+    if (isStale()) return;
+    if (requestedResourceKey === "categories") {
       await loadParentCategoryOptions();
     }
   };
@@ -506,11 +530,18 @@ export const useResourceList = (options: UseResourceListOptions) => {
     )
   );
 
+  // P2-4：筛选、分页、资源切换由多个 watcher 分别监听，一次操作（如改筛选
+  // 同时把页码重置为 1）会在同一轮触发多个 watcher。统一走合并调度器，
+  // 同一轮内只发出一次 loadRemote；配合 latestRequestTracker 丢弃乱序旧响应。
+  const scheduleLoadRemote = createCoalescedInvoke(() => {
+    void loadRemote();
+  });
+
   watch(resourceKey, () => {
     pageSize.value = getDefaultPageSize();
     resetFilters();
     void preloadContentListOptions();
-    loadRemote();
+    scheduleLoadRemote();
   });
 
   watch([keyword, statusFilter, categoryFilter], () => {
@@ -521,30 +552,25 @@ export const useResourceList = (options: UseResourceListOptions) => {
   watch([statusFilter, payTypeFilter, orderDateRange, categoryFilter], () => {
     if (!useServerFilters() && !useServerPagination()) return;
     currentPage.value = 1;
-    loadRemote();
+    scheduleLoadRemote();
   });
 
-  watch(userDateRange, () => {
+  // 用户列表：日期与会员状态均由接口筛选（与上面的通用 watcher 重叠时由调度器去重）
+  watch([userDateRange, statusFilter], () => {
     if (resourceKey.value !== "users" || !shouldUseApi()) return;
     currentPage.value = 1;
-    loadRemote();
-  });
-
-  watch(statusFilter, () => {
-    if (resourceKey.value !== "users" || !shouldUseApi()) return;
-    currentPage.value = 1;
-    loadRemote();
+    scheduleLoadRemote();
   });
 
   watch(modelDateRange, () => {
     if (resourceKey.value !== "models" || !shouldUseApi()) return;
     currentPage.value = 1;
-    loadRemote();
+    scheduleLoadRemote();
   });
 
   watch([currentPage, pageSize], () => {
     if (!useServerPagination()) return;
-    loadRemote();
+    scheduleLoadRemote();
   });
 
   watchDebounced(
@@ -552,12 +578,12 @@ export const useResourceList = (options: UseResourceListOptions) => {
     () => {
       if (useServerFilters() || useServerPagination()) {
         currentPage.value = 1;
-        loadRemote();
+        scheduleLoadRemote();
         return;
       }
       if (resourceKey.value === "users" && shouldUseApi()) {
         currentPage.value = 1;
-        loadRemote();
+        scheduleLoadRemote();
       }
     },
     { debounce: 400 }

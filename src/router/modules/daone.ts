@@ -13,7 +13,7 @@ export default [
   //       path: "/workflows/list",
   //       name: "WorkflowList",
   //       component: ResourcePage,
-  //       meta: { title: "工作流列表", resource: "workflows" } as any
+  //       meta: { title: "工作流列表", resource: "workflows" }
   //     }
   //   ]
   // },
@@ -28,7 +28,7 @@ export default [
         path: "/users/list",
         name: "UserList",
         component: ResourcePage,
-        meta: { title: "用户列表", resource: "users" } as any
+        meta: { title: "用户列表", resource: "users" }
       }
     ]
   },
@@ -43,7 +43,7 @@ export default [
         path: "/invoices/list",
         name: "InvoiceList",
         component: ResourcePage,
-        meta: { title: "开票列表", resource: "invoices" } as any
+        meta: { title: "开票列表", resource: "invoices" }
       }
     ]
   },
@@ -58,7 +58,7 @@ export default [
         path: "/models/list",
         name: "ModelList",
         component: ResourcePage,
-        meta: { title: "模型列表", resource: "models" } as any
+        meta: { title: "模型列表", resource: "models" }
       }
     ]
   },
@@ -73,13 +73,13 @@ export default [
         path: "/plans/list",
         name: "PlanList",
         component: ResourcePage,
-        meta: { title: "套餐列表", resource: "plans" } as any
+        meta: { title: "套餐列表", resource: "plans" }
       },
       {
         path: "/plans/point-packages",
         name: "PointPackageList",
         component: ResourcePage,
-        meta: { title: "积分套餐", resource: "pointPackages" } as any
+        meta: { title: "积分套餐", resource: "pointPackages" }
       }
     ]
   },
@@ -94,13 +94,13 @@ export default [
         path: "/content/inspirations",
         name: "InspirationList",
         component: ResourcePage,
-        meta: { title: "灵感发现", resource: "inspirations" } as any
+        meta: { title: "灵感发现", resource: "inspirations" }
       },
       {
         path: "/content/categories",
         name: "CategoryList",
         component: ResourcePage,
-        meta: { title: "分类管理", resource: "categories" } as any
+        meta: { title: "分类管理", resource: "categories" }
       },
       {
         path: "/content/prompts",
@@ -110,7 +110,7 @@ export default [
           title: "提示词模板",
           resource: "prompts",
           showLink: false
-        } as any
+        }
       }
     ]
   },
@@ -125,13 +125,13 @@ export default [
         path: "/materials/list",
         name: "MaterialList",
         component: ResourcePage,
-        meta: { title: "素材列表", resource: "materials" } as any
+        meta: { title: "素材列表", resource: "materials" }
       },
       {
         path: "/materials/categories",
         name: "MaterialCategoryList",
         component: ResourcePage,
-        meta: { title: "素材分类", resource: "materialCategories" } as any
+        meta: { title: "素材分类", resource: "materialCategories" }
       }
     ]
   },
@@ -146,7 +146,7 @@ export default [
         path: "/finance/orders",
         name: "OrderList",
         component: ResourcePage,
-        meta: { title: "订单列表", resource: "orders" } as any
+        meta: { title: "订单列表", resource: "orders" }
       }
     ]
   }

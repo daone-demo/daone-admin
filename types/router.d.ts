@@ -58,6 +58,8 @@ declare global {
     activePath?: string;
     /** 当前页面是否已经加载过 */
     loaded?: boolean;
+    /** Daone 通用资源页对应的资源标识 */
+    resource?: string;
   }
 
   /**

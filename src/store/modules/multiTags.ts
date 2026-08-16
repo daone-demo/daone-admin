@@ -50,18 +50,18 @@ export const useMultiTagsStore = defineStore("pure-multiTags", {
         storageLocal().removeItem(`${responsiveStorageNameSpace()}tags`);
       }
     },
-    tagsCache(multiTags) {
+    tagsCache(multiTags: multiType[]) {
       this.getMultiTagsCache &&
         storageLocal().setItem(
           `${responsiveStorageNameSpace()}tags`,
           multiTags
         );
     },
-    handleTags<T>(
+    handleTags<T = any>(
       mode: string,
-      value?: T | multiType,
+      value?: T | multiType | multiType[] | string,
       position?: positionType
-    ): T {
+    ): T | undefined {
       switch (mode) {
         case "equal":
           this.multiTags = value;
@@ -80,7 +80,7 @@ export const useMultiTagsStore = defineStore("pure-multiTags", {
             if (isBoolean(tagVal?.meta?.showLink) && !tagVal?.meta?.showLink)
               return;
             const tagPath = tagVal.path;
-            const tagHasExits = this.multiTags.some(tag => {
+            const tagHasExits = this.multiTags.some((tag: multiType) => {
               return (
                 tag.path === tagPath &&
                 isEqual(tag?.query, tagVal?.query) &&
@@ -94,12 +94,12 @@ export const useMultiTagsStore = defineStore("pure-multiTags", {
             const dynamicLevel = tagVal?.meta?.dynamicLevel ?? -1;
             if (dynamicLevel > 0) {
               if (
-                this.multiTags.filter(e => e?.path === tagPath).length >=
-                dynamicLevel
+                this.multiTags.filter((e: multiType) => e?.path === tagPath)
+                  .length >= dynamicLevel
               ) {
                 // 如果当前已打开的动态路由数大于dynamicLevel，替换第一个动态路由标签
                 const index = this.multiTags.findIndex(
-                  item => item?.path === tagPath
+                  (item: multiType) => item?.path === tagPath
                 );
                 index !== -1 && this.multiTags.splice(index, 1);
               }
@@ -110,7 +110,9 @@ export const useMultiTagsStore = defineStore("pure-multiTags", {
               getConfig()?.MaxTagsLevel &&
               isNumber(getConfig().MaxTagsLevel)
             ) {
-              if (this.multiTags.length > getConfig().MaxTagsLevel) {
+              if (
+                this.multiTags.length > (getConfig().MaxTagsLevel as number)
+              ) {
                 this.multiTags.splice(1, 1);
               }
             }
@@ -118,16 +120,18 @@ export const useMultiTagsStore = defineStore("pure-multiTags", {
           break;
         case "splice":
           if (!position) {
-            const index = this.multiTags.findIndex(v => v.path === value);
+            const index = this.multiTags.findIndex(
+              (v: multiType) => v.path === value
+            );
             if (index === -1) return;
             this.multiTags.splice(index, 1);
           } else {
             this.multiTags.splice(position?.startIndex, position?.length);
           }
           this.tagsCache(this.multiTags);
-          return this.multiTags;
+          return this.multiTags as T;
         case "slice":
-          return this.multiTags.slice(-1);
+          return this.multiTags.slice(-1) as T;
       }
     }
   }

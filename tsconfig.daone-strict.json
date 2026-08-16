@@ -1,0 +1,21 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "include": [
+    "types/*.d.ts",
+    "src/api/**/*.ts",
+    "src/utils/auth.ts",
+    "src/utils/submitLock.ts",
+    "src/utils/print.ts",
+    "src/views/login/utils/rule.ts",
+    "src/views/daone/**/*.ts"
+  ],
+  "exclude": [
+    "dist",
+    "node_modules"
+  ]
+}

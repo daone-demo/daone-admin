@@ -214,6 +214,7 @@ const setTableRef = (instance: any) => {
       :is-video-cover-url="isVideoCoverUrl"
       :is-upload-field-loading="isUploadFieldLoading"
       :get-batch-item-display-progress="getBatchItemDisplayProgress"
+      @update:form-value="(key, value) => (form[key] = value)"
       @save="save"
       @batch-drop="handleBatchDrop"
       @select-batch-files="triggerBatchFileSelect"
@@ -263,6 +264,8 @@ const setTableRef = (instance: any) => {
       :points-form="pointsForm"
       :current-points="current.points"
       :adjusting-points="adjustingPoints"
+      @update:adjust-amount="pointsForm.adjustAmount = $event ?? 0"
+      @update:adjust-reason="pointsForm.adjustReason = $event"
       @confirm="adjustPoints"
     />
   </div>

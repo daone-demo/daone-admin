@@ -6,7 +6,12 @@ defineProps<{
 }>();
 
 const visible = defineModel<boolean>("visible", { required: true });
-defineEmits<{ confirm: [] }>();
+// 表单值通过 update:* 事件回传父级统一写入，子组件不直接修改 prop
+defineEmits<{
+  confirm: [];
+  "update:adjust-amount": [value: number | undefined];
+  "update:adjust-reason": [value: string];
+}>();
 </script>
 
 <template>
@@ -19,13 +24,19 @@ defineEmits<{ confirm: [] }>();
     <el-form label-position="top" class="points-form">
       <el-form-item label="调整数量（正数增加，负数扣减）">
         <el-input-number
-          v-model="pointsForm.adjustAmount"
+          :model-value="pointsForm.adjustAmount"
           :step="100"
           class="w-full"
+          @update:model-value="$emit('update:adjust-amount', $event)"
         />
       </el-form-item>
       <el-form-item label="调整原因">
-        <el-input v-model="pointsForm.adjustReason" type="textarea" :rows="3" />
+        <el-input
+          :model-value="pointsForm.adjustReason"
+          type="textarea"
+          :rows="3"
+          @update:model-value="$emit('update:adjust-reason', $event)"
+        />
       </el-form-item>
     </el-form>
     <template #footer>

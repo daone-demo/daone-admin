@@ -48,7 +48,7 @@ const modules: Record<string, any> = import.meta.glob(
 );
 
 /** 原始静态路由（未做任何处理） */
-const routes = [];
+const routes: any[] = [];
 
 Object.keys(modules).forEach(key => {
   routes.push(modules[key].default);
@@ -69,7 +69,7 @@ export const constantMenus: Array<RouteComponent> = ascending(
 
 /** 不参与菜单的路由 */
 export const remainingPaths = Object.keys(remainingRouter).map(v => {
-  return remainingRouter[v].path;
+  return (remainingRouter as any)[v].path;
 });
 
 /** 创建路由实例 */
@@ -149,7 +149,10 @@ router.beforeEach((to: ToRouteType, _from, next) => {
   }
   if (isAuthenticated) {
     // 无权限跳转403页面
-    if (to.meta?.roles && !isOneOfArray(to.meta?.roles, userInfo?.roles)) {
+    if (
+      to.meta?.roles &&
+      !isOneOfArray(to.meta?.roles as string[], userInfo?.roles ?? [])
+    ) {
       next({ path: "/error/403" });
     }
     // 开启隐藏首页后在浏览器地址栏手动输入首页welcome路由则跳转到404页面
@@ -175,14 +178,18 @@ router.beforeEach((to: ToRouteType, _from, next) => {
             const { path } = to;
             const route = findRouteByPath(
               path,
-              router.options.routes[0].children
+              router.options.routes[0]?.children ?? []
             );
             getTopMenu(true);
             // query、params模式路由传参数的标签页不在此处处理
             if (route && route.meta?.title) {
-              if (isAllEmpty(route.parentId) && route.meta?.backstage) {
+              const routeAny = route as RouteRecordRaw & {
+                parentId?: unknown;
+                children?: RouteRecordRaw[];
+              };
+              if (isAllEmpty(routeAny.parentId) && route.meta?.backstage) {
                 // 此处为动态顶级路由（目录）
-                const { path, name, meta } = route.children[0];
+                const { path, name, meta } = routeAny.children![0];
                 useMultiTagsStoreHook().handleTags("push", {
                   path,
                   name,

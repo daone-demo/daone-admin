@@ -16,11 +16,11 @@ export const usePermissionStore = defineStore("pure-permission", {
     // 静态路由生成的菜单
     constantMenus,
     // 整体路由生成的菜单（静态、动态）
-    wholeMenus: [],
+    wholeMenus: [] as any[],
     // 整体路由（一维数组格式）
-    flatteningRoutes: [],
+    flatteningRoutes: [] as any[],
     // 缓存页面keepAlive
-    cachePageList: []
+    cachePageList: [] as string[]
   }),
   actions: {
     /** 组装整体路由生成的菜单 */
@@ -47,14 +47,15 @@ export const usePermissionStore = defineStore("pure-permission", {
       }
     },
     cacheOperate({ mode, name }: cacheType) {
-      const delIndex = this.cachePageList.findIndex(v => v === name);
+      const cacheName = name == null ? "" : String(name);
+      const delIndex = this.cachePageList.findIndex(v => v === cacheName);
       switch (mode) {
         case "refresh":
-          this.cachePageList = this.cachePageList.filter(v => v !== name);
+          this.cachePageList = this.cachePageList.filter(v => v !== cacheName);
           this.clearCache();
           break;
         case "add":
-          this.cachePageList.push(name);
+          if (cacheName) this.cachePageList.push(cacheName);
           break;
         case "delete":
           delIndex !== -1 && this.cachePageList.splice(delIndex, 1);

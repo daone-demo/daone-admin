@@ -35,8 +35,10 @@ defineProps<{
 
 const visible = defineModel<boolean>("visible", { required: true });
 
+// 表单值通过 update:form-value 事件回传父级统一写入，子组件不直接修改 form prop
 defineEmits<{
   save: [];
+  "update:form-value": [key: string, value: any];
   "batch-drop": [field: ResourceField, event: DragEvent];
   "select-batch-files": [field: ResourceField];
   "select-batch-folder": [field: ResourceField];
@@ -64,11 +66,12 @@ defineEmits<{
       >
         <el-select
           v-if="field.type === 'select'"
-          v-model="form[field.key]"
+          :model-value="form[field.key]"
           class="w-full"
           :placeholder="`请选择${field.label}`"
           :loading="isCategoryListField(field) && categoryOptionsLoading"
           clearable
+          @update:model-value="$emit('update:form-value', field.key, $event)"
         >
           <template v-if="isParentCategoryField(field)">
             <el-option label="无（一级分类）" value="" />
@@ -123,17 +126,18 @@ defineEmits<{
           :disabled="isMaterialUploadDisabled"
           :is-material-upload-field="isMaterialUploadField(field)"
           :is-video-url="isVideoCoverUrl"
-          @update:model-value="form[field.key] = $event"
+          @update:model-value="$emit('update:form-value', field.key, $event)"
           @upload="
             (uploadField, file) => $emit('upload-file', uploadField, file)
           "
         />
         <el-input
           v-else
-          v-model="form[field.key]"
+          :model-value="form[field.key]"
           :type="inputType(field)"
           :rows="4"
           :placeholder="`请输入${field.label}`"
+          @update:model-value="$emit('update:form-value', field.key, $event)"
         />
       </el-form-item>
     </el-form>
