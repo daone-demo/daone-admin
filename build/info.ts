@@ -7,7 +7,7 @@ import boxen, { type Options as BoxenOptions } from "boxen";
 dayjs.extend(duration);
 
 const welcomeMessage = gradient(["cyan", "magenta"]).multiline(
-  `您好! 欢迎使用 pure-admin 开源项目\n我们为您精心准备了下面两个贴心的保姆级文档\nhttps://pure-admin.cn\nhttps://pure-admin-utils.netlify.app`
+  `Daone 运营后台构建中\n环境与 API 基址见 README「Daone 环境与部署说明」\npnpm build:prod 结束后会校验生产 API 基址`
 );
 
 const boxenOptions: BoxenOptions = {
@@ -42,7 +42,7 @@ export function viteBuildInfo(): Plugin {
             console.log(
               boxen(
                 gradient(["cyan", "magenta"]).multiline(
-                  `🎉 恭喜打包完成（总用时${dayjs
+                  `🎉 Daone 后台打包完成（总用时${dayjs
                     .duration(endTime.diff(startTime))
                     .format("mm分ss秒")}，打包后的大小为${size}）`
                 ),

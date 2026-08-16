@@ -1,4 +1,32 @@
+# Daone 单包 workspace 根（pnpm v11+ 配置迁入此文件，不再使用 package.json#pnpm）
+packages:
+  - "."
+
+shamefullyHoist: true
+enablePrePostScripts: false
+strictPeerDependencies: false
+
+# 允许执行 install 脚本的依赖（取代 onlyBuiltDependencies / ignoredBuiltDependencies）
 allowBuilds:
-  '@parcel/watcher': true
+  "@parcel/watcher": true
+  "core-js": true
+  "es5-ext": true
   esbuild: true
+  typeit: true
   vue-demi: true
+  "@tailwindcss/oxide": false
+
+# 历史弃用包告警抑制（原 package.json#pnpm.allowedDeprecatedVersions）
+allowedDeprecatedVersions:
+  are-we-there-yet: "*"
+  sourcemap-codec: "*"
+  lodash.isequal: "*"
+  domexception: "*"
+  w3c-hr-time: "*"
+  inflight: "*"
+  npmlog: "*"
+  rimraf: "*"
+  stable: "*"
+  gauge: "*"
+  abab: "*"
+  glob: "*"

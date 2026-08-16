@@ -68,6 +68,7 @@ const {
   formatCategoryLevel,
   handleSelectionChange,
   loadRemote,
+  resetAndReload,
   useServerPagination,
   tableRef
 } = list;
@@ -155,7 +156,7 @@ const setTableRef = (instance: any) => {
         :selected-rows-count="selectedRows.length"
         :allow-delete="config.allowDelete !== false"
         :pagination-total="paginationTotal"
-        @reset="loadRemote({ resetFilters: true })"
+        @reset="resetAndReload"
         @batch-remove="batchRemove"
       />
 

@@ -31,6 +31,7 @@ import {
 } from "./useResourceNormalize";
 import { createLatestRequestTracker } from "./latestRequestTracker";
 import { createCoalescedInvoke } from "./coalescedInvoke";
+import { createReloadGate } from "./reloadGate";
 
 export interface UseResourceListOptions {
   resourceKey: ComputedRef<string> | Ref<string>;
@@ -100,7 +101,14 @@ export const useResourceList = (options: UseResourceListOptions) => {
     return false;
   };
 
+  const reloadGate = createReloadGate();
+  // 批量 reset 清空关键词时，watchDebounced 仍会在 400ms 后触发；用此标记跳过那一次
+  let skipNextKeywordReload = false;
+
   const resetFilters = () => {
+    if (keyword.value !== "") {
+      skipNextKeywordReload = true;
+    }
     keyword.value = "";
     statusFilter.value = "";
     categoryFilter.value = "";
@@ -194,46 +202,59 @@ export const useResourceList = (options: UseResourceListOptions) => {
     return flattenMaterialCategoryTree(tree);
   };
 
+  const categoryOptionsTracker = createLatestRequestTracker();
+  const parentCategoryTracker = createLatestRequestTracker();
+
   const loadCategoryOptions = async () => {
     if (!ensureAdminAuthenticated()) return;
+
+    // 请求开始时快照资源，避免素材→灵感等切换时旧分类响应覆盖新资源选项
+    const requestedResourceKey = resourceKey.value;
+    const requestedScope = config.value?.categoryScope;
+    const isCurrent = categoryOptionsTracker.begin();
+    const isStale = () =>
+      !isCurrent() || resourceKey.value !== requestedResourceKey;
 
     categoryOptionsLoading.value = true;
     try {
       let items: Array<Record<string, any>> = [];
-      if (resourceKey.value === "materials") {
+      if (requestedResourceKey === "materials") {
         items = await loadMaterialCategoryItems();
-      } else if (resourceKey.value === "inspirations") {
+      } else if (requestedResourceKey === "inspirations") {
         const payload = await adminApi.categories({ page: 1, pageSize: 100 });
         items = normalizeList(payload);
       } else {
-        const scope = config.value?.categoryScope;
         items = await fetchPaginatedResource(params =>
           adminApi.categories({
             ...params,
-            ...(scope ? { scope } : {})
+            ...(requestedScope ? { scope: requestedScope } : {})
           })
         );
       }
+      if (isStale()) return;
       const normalized =
-        resourceKey.value === "materials"
+        requestedResourceKey === "materials"
           ? normalizeMaterialCategoryItems(items).filter(isCategoryEnabled)
           : normalizeCategoryItems(items).filter(
               item =>
                 isCategoryEnabled(item) &&
-                isRelevantCategoryScope(item, config.value?.categoryScope)
+                isRelevantCategoryScope(item, requestedScope)
             );
       categoryOptions.value = buildCategorySelectOptions(
         normalized,
-        ["materials", "inspirations"].includes(resourceKey.value)
+        ["materials", "inspirations"].includes(requestedResourceKey)
           ? "id"
           : "categoryCode"
       );
     } catch (error: any) {
+      if (isStale()) return;
       categoryOptions.value = [];
       apiError.value = error?.message || "分类数据加载失败";
       ElMessage.error(apiError.value);
     } finally {
-      categoryOptionsLoading.value = false;
+      if (!isStale()) {
+        categoryOptionsLoading.value = false;
+      }
     }
   };
 
@@ -243,19 +264,26 @@ export const useResourceList = (options: UseResourceListOptions) => {
   };
 
   const loadParentCategoryOptions = async () => {
-    if (resourceKey.value !== "categories") {
+    const requestedResourceKey = resourceKey.value;
+    if (requestedResourceKey !== "categories") {
       parentCategoryRecords.value = [];
       return;
     }
 
     if (!ensureAdminAuthenticated()) return;
 
+    const isCurrent = parentCategoryTracker.begin();
+    const isStale = () =>
+      !isCurrent() || resourceKey.value !== requestedResourceKey;
+
     try {
       const payload = await adminApi.categories({ page: 1, pageSize: 1000 });
+      if (isStale()) return;
       parentCategoryRecords.value = normalizeCategoryRows(
         normalizeList(payload)
       );
     } catch (error: any) {
+      if (isStale()) return;
       parentCategoryRecords.value = [];
       apiError.value = error?.message || "父级分类加载失败";
       ElMessage.error(apiError.value);
@@ -274,8 +302,11 @@ export const useResourceList = (options: UseResourceListOptions) => {
   const loadRemoteTracker = createLatestRequestTracker();
 
   const loadRemote = async (loadOptions: { resetFilters?: boolean } = {}) => {
+    // 批量重置筛选时挂起 watcher，避免直接请求 + 微任务调度再请求
     if (loadOptions.resetFilters) {
-      resetFilters();
+      reloadGate.runSuspended(() => {
+        resetFilters();
+      });
     }
     apiError.value = "";
     if (!ensureAdminAuthenticated()) {
@@ -530,52 +561,91 @@ export const useResourceList = (options: UseResourceListOptions) => {
     )
   );
 
-  // P2-4：筛选、分页、资源切换由多个 watcher 分别监听，一次操作（如改筛选
-  // 同时把页码重置为 1）会在同一轮触发多个 watcher。统一走合并调度器，
-  // 同一轮内只发出一次 loadRemote；配合 latestRequestTracker 丢弃乱序旧响应。
+  // P2-4 / P2-3：筛选、分页、资源切换由多个 watcher 分别监听。统一走合并调度器，
+  // 同一轮内只发出一次 loadRemote；批量 reset 期间挂起 watcher，避免重复请求。
   const scheduleLoadRemote = createCoalescedInvoke(() => {
     void loadRemote();
   });
 
+  /** 重置筛选并只调度一次加载（工具栏「重置」入口） */
+  const resetAndReload = () => {
+    reloadGate.runSuspended(() => {
+      resetFilters();
+    });
+    scheduleLoadRemote();
+  };
+
   watch(resourceKey, () => {
-    pageSize.value = getDefaultPageSize();
-    resetFilters();
+    reloadGate.runSuspended(() => {
+      pageSize.value = getDefaultPageSize();
+      resetFilters();
+    });
     void preloadContentListOptions();
     scheduleLoadRemote();
   });
 
-  watch([keyword, statusFilter, categoryFilter], () => {
-    if (useServerFilters() || useServerPagination()) return;
-    currentPage.value = 1;
-  });
+  watch(
+    [keyword, statusFilter, categoryFilter],
+    () => {
+      if (reloadGate.suspended) return;
+      if (useServerFilters() || useServerPagination()) return;
+      currentPage.value = 1;
+    },
+    { flush: "sync" }
+  );
 
-  watch([statusFilter, payTypeFilter, orderDateRange, categoryFilter], () => {
-    if (!useServerFilters() && !useServerPagination()) return;
-    currentPage.value = 1;
-    scheduleLoadRemote();
-  });
+  watch(
+    [statusFilter, payTypeFilter, orderDateRange, categoryFilter],
+    () => {
+      if (reloadGate.suspended) return;
+      if (!useServerFilters() && !useServerPagination()) return;
+      currentPage.value = 1;
+      scheduleLoadRemote();
+    },
+    { flush: "sync" }
+  );
 
   // 用户列表：日期与会员状态均由接口筛选（与上面的通用 watcher 重叠时由调度器去重）
-  watch([userDateRange, statusFilter], () => {
-    if (resourceKey.value !== "users" || !shouldUseApi()) return;
-    currentPage.value = 1;
-    scheduleLoadRemote();
-  });
+  watch(
+    [userDateRange, statusFilter],
+    () => {
+      if (reloadGate.suspended) return;
+      if (resourceKey.value !== "users" || !shouldUseApi()) return;
+      currentPage.value = 1;
+      scheduleLoadRemote();
+    },
+    { flush: "sync" }
+  );
 
-  watch(modelDateRange, () => {
-    if (resourceKey.value !== "models" || !shouldUseApi()) return;
-    currentPage.value = 1;
-    scheduleLoadRemote();
-  });
+  watch(
+    modelDateRange,
+    () => {
+      if (reloadGate.suspended) return;
+      if (resourceKey.value !== "models" || !shouldUseApi()) return;
+      currentPage.value = 1;
+      scheduleLoadRemote();
+    },
+    { flush: "sync" }
+  );
 
-  watch([currentPage, pageSize], () => {
-    if (!useServerPagination()) return;
-    scheduleLoadRemote();
-  });
+  watch(
+    [currentPage, pageSize],
+    () => {
+      if (reloadGate.suspended) return;
+      if (!useServerPagination()) return;
+      scheduleLoadRemote();
+    },
+    { flush: "sync" }
+  );
 
   watchDebounced(
     keyword,
     () => {
+      if (skipNextKeywordReload) {
+        skipNextKeywordReload = false;
+        return;
+      }
+      if (reloadGate.suspended) return;
       if (useServerFilters() || useServerPagination()) {
         currentPage.value = 1;
         scheduleLoadRemote();
@@ -622,6 +692,7 @@ export const useResourceList = (options: UseResourceListOptions) => {
     ensureAdminAuthenticated,
     shouldUseApi,
     resetFilters,
+    resetAndReload,
     useServerFilters,
     useServerPagination,
     buildOrderQueryParams,

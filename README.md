@@ -1,16 +1,20 @@
-<h1>vue-pure-admin精简版（非国际化版本）</h1>
+# Daone 运营后台
 
-[![license](https://img.shields.io/github/license/pure-admin/vue-pure-admin.svg)](LICENSE)
+基于 [vue-pure-admin](https://github.com/pure-admin/vue-pure-admin) 精简版定制的 **Daone 运营管理后台**（Vue 3 + Element Plus + Vite）。
 
-**中文** | [English](./README.en-US.md)
+## 本地开发
 
-## 介绍
+```bash
+pnpm install
+pnpm dev          # 开发模式（.env.development）
+pnpm dev:test     # 测试上游
+```
 
-精简版是基于 [vue-pure-admin](https://github.com/pure-admin/vue-pure-admin) 提炼出的架子，包含主体功能，更适合实际项目开发，打包后的大小在全局引入 [element-plus](https://element-plus.org) 的情况下仍然低于 `2.3MB`，并且会永久同步完整版的代码。开启 `brotli` 压缩和 `cdn` 替换本地库模式后，打包大小低于 `350kb`
+要求：Node.js `^20.19 || >=22.13`，pnpm `>=9`（推荐 pnpm 11，配置见 `pnpm-workspace.yaml`）。
 
 ## Daone 环境与部署说明
 
-### API 基址（VITE_DAONE_API_BASE_URL）
+### API 基址（`VITE_DAONE_API_BASE_URL`）
 
 `src/api/admin.ts` 的请求基址取 `VITE_DAONE_API_BASE_URL`（回退 `VITE_API_BASE_HOST`）：
 
@@ -28,44 +32,35 @@
 - `src/views/login/utils/rule.ts`
 - `src/views/daone/**/*.ts`（含 `useResourceList` / `useResourceCrud` 及资源页纯逻辑）
 
-后续可继续把更多目录并入该配置，最终合并回主 `tsconfig.json`。
+### 构建与检查
 
-### 构建命令
+```bash
+pnpm build:prod    # --mode production + API 基址断言
+pnpm test          # 资源列表竞态 / 请求合并等回归
+pnpm lint:check    # ESLint + Prettier --check + Stylelint（CI 用）
+pnpm lint          # Prettier/Stylelint 写文件修复
+```
 
-- `pnpm build:prod` 使用 `--mode production`（对应 `.env.production`），构建后自动运行 `node scripts/check-api-base.mjs`，断言产物包含 `.env.production` 中的生产 API 基址，防止 mode 与 env 文件不匹配导致误连环境。
-- `pnpm test` 运行资源列表乱序返回等回归测试。
-- `pnpm lint:check` 只读检查（ESLint + `prettier --check` + Stylelint 非 fix 模式），适合 CI；`pnpm lint` 仍为本地写文件的自动修复模式。
+### 发布 Tag
 
-## 版本选择
+本仓库与用户端 `daone-web` 在合并并推送稳定修复后，于**各自仓库**为当前 HEAD 打附注 tag（当前工作区若有未提交变更，请先提交再打）：
 
-当前是非国际化版本，如果您需要国际化版本 [请点击](https://github.com/pure-admin/pure-admin-thin/tree/i18n)
+```bash
+# daone-admin
+git tag -a "release-2026.08.16" -m "Daone admin release 2026-08-16"
+git push origin "release-2026.08.16"
 
-## 配套视频
+# daone-web
+git tag -a "release-2026.08.16" -m "Daone web release 2026-08-16"
+git push origin "release-2026.08.16"
+```
 
-[点我查看 UI 设计](https://www.bilibili.com/video/BV17g411T7rq)  
-[点我查看快速开发教程](https://www.bilibili.com/video/BV1kg411v7QT)
+可用 `git describe --tags --exact-match` 确认 HEAD 是否已有对应 tag。
 
-## 配套保姆级文档
+## 上游模板说明
 
-[点我查看 vue-pure-admin 文档](https://pure-admin.cn/)  
-[点我查看 @pureadmin/utils 文档](https://pure-admin-utils.netlify.app)
-
-## 高级服务
-
-[点我查看详情](https://pure-admin.cn/pages/service/)
-
-## 预览
-
-[查看预览](https://pure-admin-thin.netlify.app/#/login)
-
-## 维护者
-
-[xiaoxian521](https://github.com/xiaoxian521)
-
-## ⚠️ 注意
-
-精简版不接受任何 `issues` 和 `pr`，如果有问题请到完整版 [issues](https://github.com/pure-admin/vue-pure-admin/issues/new/choose) 去提，谢谢！
+UI 骨架来自 pure-admin-thin。上游文档：[pure-admin.cn](https://pure-admin.cn/) · [@pureadmin/utils](https://pure-admin-utils.netlify.app)。业务需求与缺陷请在 Daone 项目内跟踪，勿直接向上游精简版提 issue。
 
 ## 许可证
 
-[MIT © 2020-present, pure-admin](./LICENSE)
+基于上游 [MIT](./LICENSE) 许可；业务代码按团队约定管理。

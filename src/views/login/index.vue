@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive, ref } from "vue";
+import { onBeforeUnmount, reactive, ref } from "vue";
 import { useRouter } from "vue-router";
 import { ElMessage, type FormInstance, type FormRules } from "element-plus";
 import { getTopMenu, initRouter } from "@/router/utils";
@@ -14,8 +14,26 @@ const formRef = ref<FormInstance>();
 const loading = ref(false);
 const sending = ref(false);
 const countdown = ref(0);
-const accepted = ref(true);
+const accepted = ref(false);
 const form = reactive({ phone: "", code: "" });
+
+/** 静态协议页（public/legal），新标签打开供用户先阅读再勾选同意 */
+function publicLegalHref(file: string) {
+  const base = String(import.meta.env.BASE_URL || "/");
+  const prefix = base.endsWith("/") ? base : `${base}/`;
+  return `${prefix}legal/${file}`;
+}
+const userAgreementHref = publicLegalHref("user-agreement.html");
+const privacyPolicyHref = publicLegalHref("privacy-policy.html");
+let countdownTimer: number | null = null;
+
+const clearCountdownTimer = () => {
+  if (countdownTimer !== null) {
+    window.clearInterval(countdownTimer);
+    countdownTimer = null;
+  }
+};
+
 const rules: FormRules = {
   phone: [
     { required: true, message: "请输入手机号", trigger: "blur" },
@@ -30,10 +48,11 @@ const sendCode = () =>
     try {
       await adminApi.sendSmsCode(form.phone);
       ElMessage.success("验证码已发送");
+      clearCountdownTimer();
       countdown.value = 60;
-      const timer = window.setInterval(() => {
+      countdownTimer = window.setInterval(() => {
         countdown.value -= 1;
-        if (countdown.value <= 0) window.clearInterval(timer);
+        if (countdown.value <= 0) clearCountdownTimer();
       }, 1000);
     } catch (error: any) {
       if (error?.status === 403) {
@@ -43,6 +62,10 @@ const sendCode = () =>
       }
     }
   });
+
+onBeforeUnmount(() => {
+  clearCountdownTimer();
+});
 
 const login = () =>
   runWithSubmitLock(loading, async () => {
@@ -159,13 +182,32 @@ const login = () =>
           </el-form-item>
           <label class="agreement">
             <el-checkbox v-model="accepted" />
-            <span>我已阅读并同意 <a>服务协议</a> 与 <a>隐私政策</a></span>
+            <span>
+              我已阅读并同意
+              <a
+                :href="userAgreementHref"
+                target="_blank"
+                rel="noopener noreferrer"
+                @click.stop
+              >
+                服务协议
+              </a>
+              与
+              <a
+                :href="privacyPolicyHref"
+                target="_blank"
+                rel="noopener noreferrer"
+                @click.stop
+              >
+                隐私政策
+              </a>
+            </span>
           </label>
           <el-button
             class="login-button"
             type="primary"
             :loading="loading"
-            :disabled="loading"
+            :disabled="loading || !accepted"
             @click="login"
           >
             登录
@@ -337,7 +379,12 @@ const login = () =>
 
 .agreement a {
   color: #6c5ce7;
+  text-decoration: none;
   cursor: pointer;
+}
+
+.agreement a:hover {
+  text-decoration: underline;
 }
 
 .login-button {
