@@ -11,6 +11,10 @@ import {
   extractCanvasPreviewSnapshot,
   type CanvasPreviewSnapshot
 } from "./canvasPreviewUtils";
+import {
+  canCommitPreviewGraph,
+  createPreviewMountEpoch
+} from "./previewMountEpoch";
 
 const LONG_PRESS_MS = 320;
 const LONG_PRESS_MOVE_CANCEL_PX = 6;
@@ -29,6 +33,18 @@ const snapshot = computed(() => extractCanvasPreviewSnapshot(props.payload));
 let graph: import("@antv/x6").Graph | null = null;
 let longPressTimer: ReturnType<typeof setTimeout> | null = null;
 let cleanupPanListeners: (() => void) | null = null;
+let componentMounted = false;
+const mountEpoch = createPreviewMountEpoch();
+
+/** 缓存 X6 动态导入，避免并发多次打 Chunk 且便于 await 后统一校验 */
+let x6ModulePromise: Promise<typeof import("@antv/x6")> | null = null;
+
+function loadX6() {
+  if (!x6ModulePromise) {
+    x6ModulePromise = import("@antv/x6");
+  }
+  return x6ModulePromise;
+}
 
 function syncZoomPercent() {
   if (!graph) return;
@@ -72,22 +88,56 @@ function resolveInitialView(data: CanvasPreviewSnapshot) {
 }
 
 async function mountGraph() {
+  const epoch = mountEpoch.begin();
+
   await nextTick();
-  const container = containerRef.value;
+  if (!mountEpoch.isCurrent(epoch) || !componentMounted) return;
+
   const data = snapshot.value;
-  if (!container || !data) return;
+  // payload 为空时也必须先销毁既有图，避免监听器留在脱离 DOM 的容器上
+  if (!data) {
+    destroyGraph();
+    return;
+  }
+
+  const container = containerRef.value;
+  if (
+    !canCommitPreviewGraph({
+      isCurrent: mountEpoch.isCurrent(epoch),
+      mounted: componentMounted,
+      container,
+      hasSnapshot: true
+    })
+  ) {
+    // 容器尚未因 v-if 挂上时先销毁旧图，等下次 payload/挂载再试
+    destroyGraph();
+    return;
+  }
 
   destroyGraph();
 
-  const width = container.clientWidth;
+  const width = container!.clientWidth;
   const height =
-    container.clientHeight > 0 ? container.clientHeight : STAGE_HEIGHT;
+    container!.clientHeight > 0 ? container!.clientHeight : STAGE_HEIGHT;
 
-  // 打开预览时再拉取 X6，避免 ResourcePage 同步依赖图编辑器
-  const { Graph } = await import("@antv/x6");
+  const { Graph } = await loadX6();
+
+  if (
+    !canCommitPreviewGraph({
+      isCurrent: mountEpoch.isCurrent(epoch),
+      mounted: componentMounted,
+      container: containerRef.value,
+      hasSnapshot: Boolean(snapshot.value)
+    })
+  ) {
+    return;
+  }
+
+  const liveContainer = containerRef.value!;
+  const liveData = snapshot.value!;
 
   graph = new Graph({
-    container,
+    container: liveContainer,
     width: width > 0 ? width : undefined,
     height: height > 0 ? height : STAGE_HEIGHT,
     autoResize: true,
@@ -115,12 +165,25 @@ async function mountGraph() {
     }
   });
 
-  graph.fromJSON(data.graph);
+  graph.fromJSON(liveData.graph);
 
   await nextTick();
-  graph.resize(container.clientWidth, STAGE_HEIGHT);
+  if (
+    !canCommitPreviewGraph({
+      isCurrent: mountEpoch.isCurrent(epoch),
+      mounted: componentMounted,
+      container: containerRef.value,
+      hasSnapshot: Boolean(snapshot.value)
+    }) ||
+    !graph
+  ) {
+    destroyGraph();
+    return;
+  }
 
-  resolveInitialView(data);
+  graph.resize(liveContainer.clientWidth, STAGE_HEIGHT);
+
+  resolveInitialView(liveData);
 
   graph.on("scale", syncZoomPercent);
   bindLongPressPan();
@@ -269,6 +332,7 @@ function resetView() {
 }
 
 onMounted(() => {
+  componentMounted = true;
   void mountGraph();
 });
 
@@ -276,10 +340,13 @@ watch(
   () => props.payload,
   () => {
     void mountGraph();
-  }
+  },
+  { flush: "post" }
 );
 
 onBeforeUnmount(() => {
+  componentMounted = false;
+  mountEpoch.invalidate();
   destroyGraph();
 });
 </script>
