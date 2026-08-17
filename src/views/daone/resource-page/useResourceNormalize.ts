@@ -108,13 +108,29 @@ export const normalizeRemoteRows = (items: any[], resourceKey: string) => {
       const prices = plan.prices || [];
       const firstPrice = prices[0] || {};
       const priceItems = buildPlanPriceItems(prices);
+      const benefitsFromPrices = prices.flatMap((price: any) => {
+        if (Array.isArray(price.benefits) && price.benefits.length) {
+          return price.benefits.map((item: unknown) => String(item).trim());
+        }
+        return String(price.benefitsText || "")
+          .split(/\r?\n/)
+          .map((line: string) => line.trim())
+          .filter(Boolean);
+      });
+      const legacyBenefits = Array.isArray(plan.benefits)
+        ? plan.benefits.map((item: unknown) => String(item).trim())
+        : [];
+      const benefitList = (
+        benefitsFromPrices.length ? benefitsFromPrices : legacyBenefits
+      ).filter(Boolean);
+      const uniqueBenefits = [...new Set(benefitList)];
       return {
         ...plan,
         id: plan.id || plan.planCode,
         description: String(plan.description || ""),
-        benefitsText: (plan.benefits || []).join("\n"),
-        benefitSummary: (plan.benefits || []).join("；"),
-        benefitList: plan.benefits || [],
+        benefitsText: uniqueBenefits.join("\n"),
+        benefitSummary: uniqueBenefits.join("；"),
+        benefitList: uniqueBenefits,
         status: plan.status === "ENABLED" ? "启用" : "停用",
         priceCode: String(firstPrice.priceCode || ""),
         cycleUnit: String(firstPrice.cycleUnit || "MONTH"),

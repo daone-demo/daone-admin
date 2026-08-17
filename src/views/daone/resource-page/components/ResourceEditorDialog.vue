@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import type { ResourceConfig, ResourceField } from "../../resourceData";
 import type { BatchMediaItem } from "../useBatchMediaUpload";
+import type { PlanPriceFormItem } from "../planPriceForm";
 import BatchMediaUploadField from "./BatchMediaUploadField.vue";
+import PlanPricesEditor from "./PlanPricesEditor.vue";
 import SingleMediaUploadField from "./SingleMediaUploadField.vue";
 
 defineProps<{
   config: ResourceConfig;
+  resourceKey: string;
   editingId: string;
   form: Record<string, any>;
   editorFields: ResourceField[];
@@ -39,6 +42,7 @@ const visible = defineModel<boolean>("visible", { required: true });
 defineEmits<{
   save: [];
   "update:form-value": [key: string, value: any];
+  "update:price-items": [value: PlanPriceFormItem[]];
   "batch-drop": [field: ResourceField, event: DragEvent];
   "select-batch-files": [field: ResourceField];
   "select-batch-folder": [field: ResourceField];
@@ -55,7 +59,7 @@ defineEmits<{
         ? `编辑${config.title.replace('管理', '')}`
         : config.createText || '新增记录'
     "
-    width="560px"
+    :width="resourceKey === 'plans' ? '720px' : '560px'"
   >
     <el-form label-position="top">
       <el-form-item
@@ -138,6 +142,13 @@ defineEmits<{
           :rows="4"
           :placeholder="`请输入${field.label}`"
           @update:model-value="$emit('update:form-value', field.key, $event)"
+        />
+      </el-form-item>
+
+      <el-form-item v-if="resourceKey === 'plans'" label="价格方案" required>
+        <PlanPricesEditor
+          :model-value="form.priceItems || []"
+          @update:model-value="$emit('update:price-items', $event)"
         />
       </el-form-item>
     </el-form>

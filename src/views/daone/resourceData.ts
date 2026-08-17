@@ -164,7 +164,7 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
     icon: "ri:brain-line",
     color: "#e17055",
     apiResource: "models",
-    allowDelete: false,
+    allowDelete: true,
     allowStatus: true,
     createText: "新增模型",
     searchable: ["modelName", "modelCode", "taskType"],
@@ -215,20 +215,7 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
     fields: [
       { key: "planCode", label: "套餐编码", required: true, createOnly: true },
       { key: "planName", label: "套餐名称", required: true },
-      { key: "description", label: "套餐描述", type: "textarea" },
-      { key: "benefitsText", label: "套餐权益（每行一项）", type: "textarea" },
-      { key: "priceCode", label: "价格编码", required: true },
-      {
-        key: "cycleUnit",
-        label: "计费周期",
-        type: "select",
-        options: ["MONTH", "YEAR"],
-        required: true
-      },
-      { key: "cycleCount", label: "周期数量", type: "number" },
-      { key: "priceYuan", label: "售价（元）", type: "number", required: true },
-      { key: "originalPriceYuan", label: "原价（元）", type: "number" },
-      { key: "grantPoints", label: "赠送积分", type: "number", required: true }
+      { key: "description", label: "套餐描述", type: "textarea" }
     ],
     columns: [
       { key: "planName", label: "套餐", minWidth: 160 },

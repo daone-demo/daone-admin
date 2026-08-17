@@ -338,6 +338,14 @@ export const adminApi = {
       )
     );
   },
+  /** DELETE /admin/v1/model-configs/{modelId} */
+  deleteModel(modelId: string | number) {
+    return unwrap(
+      client.delete(
+        `/admin/v1/model-configs/${encodeURIComponent(String(modelId))}`
+      )
+    );
+  },
   modelDetail(modelCode: string) {
     return unwrap(
       client.get(`/admin/v1/model-configs/${encodeURIComponent(modelCode)}`)

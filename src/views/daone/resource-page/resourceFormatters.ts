@@ -88,12 +88,21 @@ export const buildPlanPriceItems = (prices: any[] = []) =>
       Number(price.cycleCount || 1),
       String(price.cycleUnit || "MONTH")
     );
+    const benefits = Array.isArray(price.benefits)
+      ? price.benefits
+          .map((item: unknown) => String(item).trim())
+          .filter(Boolean)
+      : String(price.benefitsText || "")
+          .split(/\r?\n/)
+          .map((line: string) => line.trim())
+          .filter(Boolean);
     return {
       priceCode: String(price.priceCode || ""),
       priceText: `¥${yuan.toLocaleString()}/${cycle}`,
       originalText:
         originalYuan > yuan ? `¥${originalYuan.toLocaleString()}` : "",
       grantPoints: Number(price.grantPoints || 0),
+      benefits,
       status: price.status === "ENABLED" ? "启用" : "停用"
     };
   });

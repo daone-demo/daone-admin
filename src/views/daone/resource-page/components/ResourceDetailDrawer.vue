@@ -81,10 +81,24 @@ defineEmits<{
               {{ item.status }}
             </el-tag>
           </div>
+          <div
+            v-if="(item.benefits || []).length"
+            class="plan-benefits-cell plan-price-benefits"
+          >
+            <el-tag
+              v-for="(benefit, benefitIndex) in item.benefits"
+              :key="`${benefit}-${benefitIndex}`"
+              size="small"
+              effect="plain"
+              round
+            >
+              {{ benefit }}
+            </el-tag>
+          </div>
         </div>
       </div>
       <el-empty v-else description="暂无计费方案" :image-size="64" />
-      <h4>套餐权益</h4>
+      <h4>套餐权益汇总</h4>
       <div v-if="(current.benefitList || []).length" class="plan-benefits-cell">
         <el-tag
           v-for="(benefit, index) in current.benefitList"
@@ -218,6 +232,10 @@ defineEmits<{
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+.plan-price-benefits {
+  margin-top: 4px;
 }
 
 .project-list {

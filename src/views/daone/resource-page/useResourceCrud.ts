@@ -13,6 +13,13 @@ import type { ResourceConfig } from "../resourceData";
 import type { BatchMediaUploadState } from "./useBatchMediaUpload";
 import type { ResourceListState } from "./useResourceList";
 import { normalizeList } from "./useResourceNormalize";
+import {
+  createEmptyPlanPriceItem,
+  mapApiPricesToFormItems,
+  mapFormItemsToApiPrices,
+  validatePlanPriceItems,
+  type PlanPriceFormItem
+} from "./planPriceForm";
 
 export interface UseResourceCrudOptions {
   resourceKey: ComputedRef<string> | Ref<string>;
@@ -129,37 +136,35 @@ export const useResourceCrud = (options: UseResourceCrudOptions) => {
         }
       ];
     }
-    if (resourceKey.value === "plans" && !row) {
-      form.cycleUnit = "MONTH";
-      form.cycleCount = 1;
+    if (resourceKey.value === "plans") {
+      if (row) {
+        const fallbackBenefits = Array.isArray(row.benefitList)
+          ? row.benefitList
+          : [];
+        form.priceItems = mapApiPricesToFormItems(
+          row.prices || [],
+          fallbackBenefits
+        );
+      } else {
+        form.priceItems = [createEmptyPlanPriceItem()];
+      }
     }
     dialogVisible.value = true;
   };
 
   const toApiPayload = () => {
     if (resourceKey.value === "plans") {
-      const benefitsText = String(form.benefitsText || "");
+      const prices = mapFormItemsToApiPrices(
+        (form.priceItems || []) as PlanPriceFormItem[]
+      );
       const payload: Record<string, any> = {
         attributes: current.value?.attributes || {},
-        planCode: String(form.planCode || "").trim(),
         planName: String(form.planName || "").trim(),
         description: String(form.description || "").trim(),
-        benefits: benefitsText.split("\n").filter(Boolean),
-        benefitsText,
-        prices: [
-          {
-            priceCode: String(form.priceCode || "").trim(),
-            cycleUnit: String(form.cycleUnit || "MONTH"),
-            cycleCount: Number(form.cycleCount || 1),
-            priceFen: Math.round(Number(form.priceYuan || 0) * 100),
-            originalPriceFen: Math.round(
-              Number(form.originalPriceYuan || 0) * 100
-            ),
-            grantPoints: Number(form.grantPoints || 0)
-          }
-        ]
+        prices
       };
       if (!editingId.value) {
+        payload.planCode = String(form.planCode || "").trim();
         payload.status = "ENABLED";
       }
       return payload;
@@ -314,6 +319,15 @@ export const useResourceCrud = (options: UseResourceCrudOptions) => {
       if (missing) {
         ElMessage.warning(`请填写${missing.label}`);
         return;
+      }
+      if (resourceKey.value === "plans") {
+        const priceError = validatePlanPriceItems(
+          (form.priceItems || []) as PlanPriceFormItem[]
+        );
+        if (priceError) {
+          ElMessage.warning(priceError);
+          return;
+        }
       }
       if (
         resourceKey.value === "inspirations" &&
@@ -520,7 +534,7 @@ export const useResourceCrud = (options: UseResourceCrudOptions) => {
   const remove = async (row: Record<string, any>) => {
     if (!canCallManagementApi()) return;
     await ElMessageBox.confirm(
-      `确定删除“${row.planName || row.packageName || row.name || row.title || row.id}”吗？`,
+      `确定删除“${row.planName || row.packageName || row.modelName || row.name || row.title || row.id}”吗？`,
       "删除确认",
       {
         type: "warning"
@@ -531,6 +545,10 @@ export const useResourceCrud = (options: UseResourceCrudOptions) => {
         await adminApi.deleteWorkflow(String(row.id));
       } else if (resourceKey.value === "plans") {
         await adminApi.deletePlan(String(row.id));
+      } else if (resourceKey.value === "models") {
+        await adminApi.deleteModel(
+          String(row.id || row.modelId || row.modelCode)
+        );
       } else if (resourceKey.value === "inspirations") {
         await adminApi.deleteInspiration(String(row.id));
       } else if (resourceKey.value === "materials") {

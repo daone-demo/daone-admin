@@ -199,6 +199,7 @@ const setTableRef = (instance: any) => {
     <ResourceEditorDialog
       v-model:visible="dialogVisible"
       :config="config"
+      :resource-key="resourceKey"
       :editing-id="editingId"
       :form="form"
       :editor-fields="editorFields"
@@ -220,6 +221,7 @@ const setTableRef = (instance: any) => {
       :is-upload-field-loading="isUploadFieldLoading"
       :get-batch-item-display-progress="getBatchItemDisplayProgress"
       @update:form-value="(key, value) => (form[key] = value)"
+      @update:price-items="value => (form.priceItems = value)"
       @save="save"
       @batch-drop="handleBatchDrop"
       @select-batch-files="triggerBatchFileSelect"
