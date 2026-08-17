@@ -270,6 +270,12 @@ export const adminApi = {
       client.get(`/admin/v1/plans/${encodeURIComponent(planCode)}`)
     );
   },
+  /** DELETE /admin/v1/plans/{planId} */
+  deletePlan(planId: string | number) {
+    return unwrap(
+      client.delete(`/admin/v1/plans/${encodeURIComponent(String(planId))}`)
+    );
+  },
   pointPackages() {
     return unwrap(client.get("/admin/v1/recharge-packages")) as Promise<
       { items?: any[] } | any[]

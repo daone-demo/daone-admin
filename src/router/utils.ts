@@ -209,19 +209,32 @@ function initRouter(): Promise<typeof router> {
       });
     } else {
       return new Promise<typeof router>(resolve => {
-        getAsyncRoutes().then(({ data }) => {
-          handleAsyncRoutes(cloneDeep(data));
-          storageLocal().setItem(key, data);
-          resolve(router);
-        });
+        getAsyncRoutes()
+          .then(({ data }) => {
+            const list = Array.isArray(data) ? data : [];
+            handleAsyncRoutes(cloneDeep(list));
+            storageLocal().setItem(key, list);
+            resolve(router);
+          })
+          .catch(error => {
+            console.error("[initRouter] getAsyncRoutes failed", error);
+            handleAsyncRoutes([]);
+            resolve(router);
+          });
       });
     }
   } else {
     return new Promise<typeof router>(resolve => {
-      getAsyncRoutes().then(({ data }) => {
-        handleAsyncRoutes(cloneDeep(data));
-        resolve(router);
-      });
+      getAsyncRoutes()
+        .then(({ data }) => {
+          handleAsyncRoutes(cloneDeep(Array.isArray(data) ? data : []));
+          resolve(router);
+        })
+        .catch(error => {
+          console.error("[initRouter] getAsyncRoutes failed", error);
+          handleAsyncRoutes([]);
+          resolve(router);
+        });
     });
   }
 }

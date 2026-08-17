@@ -520,7 +520,7 @@ export const useResourceCrud = (options: UseResourceCrudOptions) => {
   const remove = async (row: Record<string, any>) => {
     if (!canCallManagementApi()) return;
     await ElMessageBox.confirm(
-      `确定删除“${row.name || row.title || row.id}”吗？`,
+      `确定删除“${row.planName || row.packageName || row.name || row.title || row.id}”吗？`,
       "删除确认",
       {
         type: "warning"
@@ -529,6 +529,8 @@ export const useResourceCrud = (options: UseResourceCrudOptions) => {
     try {
       if (resourceKey.value === "workflows") {
         await adminApi.deleteWorkflow(String(row.id));
+      } else if (resourceKey.value === "plans") {
+        await adminApi.deletePlan(String(row.id));
       } else if (resourceKey.value === "inspirations") {
         await adminApi.deleteInspiration(String(row.id));
       } else if (resourceKey.value === "materials") {

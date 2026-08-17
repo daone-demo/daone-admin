@@ -200,7 +200,7 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
     color: "#fdcb6e",
     apiResource: "plans",
     hideMetrics: true,
-    allowDelete: false,
+    allowDelete: true,
     allowStatus: true,
     tableFullWidth: true,
     createText: "新增套餐",
