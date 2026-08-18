@@ -8,6 +8,8 @@
 export interface LatestRequestTracker {
   /** 登记一次新请求，返回该请求的 isCurrent 判定函数 */
   begin: () => () => boolean;
+  /** 作废所有进行中的请求（关闭弹窗等） */
+  invalidate: () => void;
 }
 
 export function createLatestRequestTracker(): LatestRequestTracker {
@@ -16,6 +18,9 @@ export function createLatestRequestTracker(): LatestRequestTracker {
     begin() {
       const id = ++latestId;
       return () => id === latestId;
+    },
+    invalidate() {
+      latestId += 1;
     }
   };
 }

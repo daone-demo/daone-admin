@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { PlanPriceFormItem } from "../planPriceForm";
-import { createEmptyPlanPriceItem } from "../planPriceForm";
+import { createEmptyPlanPriceItem, PLAN_CYCLE_UNITS } from "../planPriceForm";
 
 const props = defineProps<{
   modelValue: PlanPriceFormItem[];
@@ -82,8 +82,12 @@ const removeItem = (index: number) => {
             placeholder="请选择计费周期"
             @update:model-value="updateItem(index, 'cycleUnit', $event)"
           >
-            <el-option label="MONTH" value="MONTH" />
-            <el-option label="YEAR" value="YEAR" />
+            <el-option
+              v-for="unit in PLAN_CYCLE_UNITS"
+              :key="unit"
+              :label="unit"
+              :value="unit"
+            />
           </el-select>
         </el-form-item>
 
@@ -100,6 +104,8 @@ const removeItem = (index: number) => {
           <el-input
             :model-value="item.priceYuan"
             type="number"
+            min="0"
+            step="0.01"
             placeholder="请输入售价（元）"
             @update:model-value="updateItem(index, 'priceYuan', $event)"
           />
@@ -109,6 +115,8 @@ const removeItem = (index: number) => {
           <el-input
             :model-value="item.originalPriceYuan"
             type="number"
+            min="0"
+            step="0.01"
             placeholder="请输入原价（元）"
             @update:model-value="updateItem(index, 'originalPriceYuan', $event)"
           />
@@ -118,6 +126,8 @@ const removeItem = (index: number) => {
           <el-input
             :model-value="item.grantPoints"
             type="number"
+            min="0"
+            step="1"
             placeholder="请输入赠送积分"
             @update:model-value="updateItem(index, 'grantPoints', $event)"
           />

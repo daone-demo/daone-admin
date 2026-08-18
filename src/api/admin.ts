@@ -68,7 +68,7 @@ export interface AdminTrialStats {
 }
 
 const client = axios.create({
-  // 本地开发用相对路径走 Vite proxy；线上打包注入完整 API 地址直连
+  // 本地开发 / 生产默认同源 /api（Vite proxy 或 Nginx 反代）；也可注入绝对地址直连
   baseURL:
     import.meta.env.VITE_DAONE_API_BASE_URL ||
     import.meta.env.VITE_API_BASE_HOST,

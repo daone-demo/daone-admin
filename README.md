@@ -18,10 +18,12 @@ pnpm dev:test     # 测试上游
 
 `src/api/admin.ts` 的请求基址取 `VITE_DAONE_API_BASE_URL`（回退 `VITE_API_BASE_HOST`）：
 
-- **本地开发 / 测试模式**：`.env` 与 `.env.test` 设为相对路径 `/api`，浏览器请求同源 `/api`，由 Vite 代理按 `VITE_API_BASE_HOST` 转发到上游（详见 `vite.config.ts` 的 `createDevApiProxy`）。
-- **生产 / 预发布构建**：`.env.production` 与 `.env.staging` 显式覆盖为**绝对地址**（浏览器直连后端，不依赖站点反向代理）。注意 Vite 在所有模式下都会加载 `.env`，因此这两个文件必须显式声明 `VITE_DAONE_API_BASE_URL`，否则产物会悄悄回退到相对路径 `/api`。
+- **本地开发 / 测试 / 生产**：`.env`、`.env.test`、`.env.production` 均为相对路径 `/api`。浏览器只请求当前站点同源 `/api`。
+  - 本地：Vite 按 `VITE_API_BASE_HOST` 转发（`vite.config.ts` 的 `createDevApiProxy`）。
+  - 生产：部署侧必须提供 `/api` 反代，路径替换规则同 `createDevApiProxy`（`/api/foo` → `VITE_API_BASE_HOST/foo`）。Docker 用 `nginx.docker.conf`（80 端口、`/usr/share/nginx/html`）；宿主机 9081+TLS 用 `nginx.conf`。
+- **预发布构建**：`.env.staging` 仍为绝对地址（浏览器直连后端）。Vite 在所有模式下都会加载 `.env`，因此各 mode 的 env 文件必须显式声明 `VITE_DAONE_API_BASE_URL`。
 
-若确需让生产包走相对路径 `/api`：部署站点**必须**提供 `/api` 反向代理，将 `/api/*` 转发到后端网关（等价于 `VITE_API_BASE_HOST` 指向的地址，路径替换规则同 `createDevApiProxy`），并同步调整 `scripts/check-api-base.mjs` 的断言。
+`pnpm build:prod` 会校验产物中的生产基址为 `/api` 或绝对 `http(s)` URL。
 
 ### TypeScript strict 岛
 
@@ -36,7 +38,8 @@ pnpm dev:test     # 测试上游
 ### 构建与检查
 
 ```bash
-pnpm build:prod    # --mode production + API 基址断言 + gzip 体积预算
+pnpm build:prod    # --mode production + 同源 /api 断言 + gzip 体积预算
+# Docker：pnpm build:prod 产物 + nginx.docker.conf（listen 80）
 pnpm test          # 资源列表竞态 / 请求合并等回归
 pnpm lint:check    # ESLint + Prettier --check + Stylelint（CI 用）
 pnpm lint          # Prettier/Stylelint 写文件修复

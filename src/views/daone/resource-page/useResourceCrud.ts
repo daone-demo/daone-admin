@@ -13,6 +13,7 @@ import type { ResourceConfig } from "../resourceData";
 import type { BatchMediaUploadState } from "./useBatchMediaUpload";
 import type { ResourceListState } from "./useResourceList";
 import { normalizeList } from "./useResourceNormalize";
+import { createLatestRequestTracker } from "./latestRequestTracker";
 import {
   createEmptyPlanPriceItem,
   mapApiPricesToFormItems,
@@ -75,6 +76,8 @@ export const useResourceCrud = (options: UseResourceCrudOptions) => {
   const { submitting: saving, withSubmitLock: withSaveLock } = useSubmitLock();
   const { submitting: adjustingPoints, withSubmitLock: withAdjustLock } =
     useSubmitLock();
+  const userProjectsTracker = createLatestRequestTracker();
+  const projectCanvasTracker = createLatestRequestTracker();
 
   const canCallManagementApi = () => {
     if (!ensureAdminAuthenticated()) return false;
@@ -624,33 +627,47 @@ export const useResourceCrud = (options: UseResourceCrudOptions) => {
     }
     if (!ensureAdminAuthenticated()) return;
 
-    const userId = String(current.value?.id || "");
-    if (!userId) return;
+    const requestedUserId = String(current.value?.id || "");
+    if (!requestedUserId) return;
+
+    const requestedPage = userProjectsPage.value;
+    const isCurrent = userProjectsTracker.begin();
+    const isLatest = () =>
+      isCurrent() &&
+      resourceKey.value === "users" &&
+      String(current.value?.id || "") === requestedUserId;
+    const canCommit = () => isLatest() && detailVisible.value;
 
     userProjectsLoading.value = true;
     try {
-      const payload = await adminApi.userProjects(userId, {
-        page: userProjectsPage.value,
+      const payload = await adminApi.userProjects(requestedUserId, {
+        page: requestedPage,
         pageSize: userProjectsPageSize
       });
+      if (!canCommit()) return;
       userProjects.value = normalizeList(payload);
       userProjectsTotal.value = Number(
         payload?.total ?? userProjects.value.length
       );
     } catch (error: any) {
+      if (!canCommit()) return;
       userProjects.value = [];
       userProjectsTotal.value = 0;
       ElMessage.error(error?.message || "用户项目加载失败");
     } finally {
-      userProjectsLoading.value = false;
+      if (isLatest()) {
+        userProjectsLoading.value = false;
+      }
     }
   };
 
   watch(detailVisible, visible => {
     if (visible) return;
+    userProjectsTracker.invalidate();
     userProjectsPage.value = 1;
     userProjects.value = [];
     userProjectsTotal.value = 0;
+    userProjectsLoading.value = false;
   });
 
   watch(userProjectsPage, () => {
@@ -659,9 +676,14 @@ export const useResourceCrud = (options: UseResourceCrudOptions) => {
   });
 
   const openUserProjectCanvas = async (project: Record<string, any>) => {
-    const userId = String(current.value?.id || "");
-    const projectId = String(project.id ?? project.projectId ?? "");
-    if (!userId || !projectId) return;
+    const requestedUserId = String(current.value?.id || "");
+    const requestedProjectId = String(project.id ?? project.projectId ?? "");
+    if (!requestedUserId || !requestedProjectId) return;
+
+    const isCurrent = projectCanvasTracker.begin();
+    const isLatest = () =>
+      isCurrent() && String(current.value?.id || "") === requestedUserId;
+    const canCommit = () => isLatest() && projectCanvasVisible.value;
 
     projectCanvasTitle.value = String(project.title || "项目画布");
     projectCanvasVisible.value = true;
@@ -669,17 +691,29 @@ export const useResourceCrud = (options: UseResourceCrudOptions) => {
     projectCanvasPayload.value = null;
 
     try {
-      projectCanvasPayload.value = (await adminApi.userProjectCanvas(
-        userId,
-        projectId
+      const payload = (await adminApi.userProjectCanvas(
+        requestedUserId,
+        requestedProjectId
       )) as Record<string, unknown>;
+      if (!canCommit()) return;
+      projectCanvasPayload.value = payload;
     } catch (error: any) {
+      if (!isLatest()) return;
       projectCanvasVisible.value = false;
       ElMessage.error(error?.message || "画布数据加载失败");
     } finally {
-      projectCanvasLoading.value = false;
+      if (isLatest()) {
+        projectCanvasLoading.value = false;
+      }
     }
   };
+
+  watch(projectCanvasVisible, visible => {
+    if (visible) return;
+    projectCanvasTracker.invalidate();
+    projectCanvasPayload.value = null;
+    projectCanvasLoading.value = false;
+  });
 
   const openPoints = (row: Record<string, any>) => {
     current.value = row;

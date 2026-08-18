@@ -15,7 +15,7 @@
     "report": "pnpm typecheck && rimraf dist && vite build",
     "preview": "vite preview",
     "preview:build": "pnpm build && vite preview",
-    "test": "node --experimental-strip-types --test --test-force-exit scripts/resource-race.test.ts scripts/resource-list-control.test.ts scripts/preview-mount-race.test.ts",
+    "test": "node --experimental-strip-types --test --test-force-exit scripts/resource-race.test.ts scripts/resource-list-control.test.ts scripts/preview-mount-race.test.ts scripts/plan-price-form.test.ts scripts/user-project-race.test.ts",
     "typecheck": "tsc --noEmit && vue-tsc --noEmit --skipLibCheck && pnpm typecheck:strict",
     "typecheck:strict": "tsc --noEmit -p tsconfig.daone-strict.json",
     "check:bundle-budget": "node scripts/check-bundle-budget.mjs",
