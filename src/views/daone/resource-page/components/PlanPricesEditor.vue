@@ -87,14 +87,14 @@ const removeItem = (index: number) => {
           </el-select>
         </el-form-item>
 
-        <el-form-item label="周期数量">
+        <!-- <el-form-item label="周期数量">
           <el-input
             :model-value="item.cycleCount"
             type="number"
             placeholder="请输入周期数量"
             @update:model-value="updateItem(index, 'cycleCount', $event)"
           />
-        </el-form-item>
+        </el-form-item> -->
 
         <el-form-item label="售价（元）" required>
           <el-input
