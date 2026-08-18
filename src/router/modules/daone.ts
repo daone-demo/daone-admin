@@ -147,6 +147,12 @@ export default [
         name: "OrderList",
         component: ResourcePage,
         meta: { title: "订单列表", resource: "orders" }
+      },
+      {
+        path: "/finance/trial-applications",
+        name: "TrialApplicationList",
+        component: ResourcePage,
+        meta: { title: "试用申请", resource: "trialApplications" }
       }
     ]
   }

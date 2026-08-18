@@ -25,6 +25,7 @@ export interface ResourceConfig {
     | "users"
     | "invoices"
     | "orders"
+    | "trialApplications"
     | "plans"
     | "pointPackages"
     | "models"
@@ -348,6 +349,30 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
       { key: "payType", label: "支付方式" },
       { key: "createdAt", label: "下单时间" },
       { key: "status", label: "状态", width: 100 }
+    ]
+  },
+  trialApplications: {
+    title: "试用申请",
+    description: "审核前台试用申请，支持按状态筛选、通过或拒绝",
+    icon: "ri:user-star-line",
+    color: "#6c5ce7",
+    apiResource: "trialApplications",
+    serverFilters: true,
+    allowCreate: false,
+    allowDelete: false,
+    allowStatus: false,
+    searchable: ["contactName", "phone", "position", "id", "userId"],
+    searchPlaceholder: "搜索联系人、手机号或用户 ID",
+    fields: [],
+    columns: [
+      { key: "contactName", label: "公司/联系人" },
+      { key: "phone", label: "手机号" },
+      { key: "position", label: "职位" },
+      { key: "userId", label: "用户 ID", width: 100 },
+      { key: "createdAt", label: "申请时间" },
+      { key: "status", label: "状态", width: 100 },
+      { key: "rejectReason", label: "拒绝原因" },
+      { key: "reviewedAt", label: "审批时间" }
     ]
   },
   prompts: {

@@ -34,6 +34,8 @@ const emit = defineEmits<{
   "open-editor": [row: Record<string, any>];
   "open-points": [row: Record<string, any>];
   "toggle-status": [row: Record<string, any>];
+  "review-approve": [row: Record<string, any>];
+  "review-reject": [row: Record<string, any>];
   remove: [row: Record<string, any>];
 }>();
 </script>
@@ -84,7 +86,8 @@ const emit = defineEmits<{
               'nickname',
               'modelName',
               'planName',
-              'invoiceTitle'
+              'invoiceTitle',
+              'contactName'
             ].includes(column.key)
           "
           class="primary-cell"
@@ -234,7 +237,13 @@ const emit = defineEmits<{
       label="操作"
       class-name="action-column"
       :fixed="isTableFullWidth ? false : 'right'"
-      :width="isTableFullWidth ? undefined : 230"
+      :width="
+        isTableFullWidth
+          ? undefined
+          : resourceKey === 'trialApplications'
+            ? 260
+            : 230
+      "
       :min-width="isTableFullWidth ? 220 : undefined"
       align="right"
     >
@@ -251,6 +260,24 @@ const emit = defineEmits<{
           >
             调整积分
           </el-button>
+          <template v-else-if="resourceKey === 'trialApplications'">
+            <el-button
+              v-if="row.statusRaw === 'PENDING'"
+              link
+              type="success"
+              @click="emit('review-approve', row)"
+            >
+              审核通过
+            </el-button>
+            <el-button
+              v-if="row.statusRaw === 'PENDING'"
+              link
+              type="danger"
+              @click="emit('review-reject', row)"
+            >
+              拒绝
+            </el-button>
+          </template>
           <template
             v-else-if="resourceKey !== 'orders' && resourceKey !== 'invoices'"
           >

@@ -35,6 +35,18 @@ export const invoiceStatusOptions = [
   { label: "已驳回", value: "REJECTED" }
 ];
 
+export const trialApplicationStatusLabels: Record<string, string> = {
+  PENDING: "待审批",
+  APPROVED: "已通过",
+  REJECTED: "已拒绝"
+};
+
+export const trialApplicationStatusOptions = [
+  { label: "待审批", value: "PENDING" },
+  { label: "已通过", value: "APPROVED" },
+  { label: "已拒绝", value: "REJECTED" }
+];
+
 export const userSubscriptionStatusOptions = [
   { label: "会员", value: "ACTIVE" },
   { label: "非会员", value: "EXPIRED" }
@@ -64,6 +76,9 @@ export const formatOrderStatus = (value: string) =>
 
 export const formatInvoiceStatus = (value: string) =>
   invoiceStatusLabels[String(value || "").toUpperCase()] || value;
+
+export const formatTrialApplicationStatus = (value: string) =>
+  trialApplicationStatusLabels[String(value || "").toUpperCase()] || value;
 
 export const formatMaterialType = (value: string) =>
   materialTypeLabels[String(value || "").toUpperCase()] || value;
@@ -118,7 +133,9 @@ export const statusType = (value: string) => {
       "有效会员",
       "PAID",
       "ENABLED",
-      "ISSUED"
+      "ISSUED",
+      "APPROVED",
+      "已通过"
     ].includes(value)
   )
     return "success";
@@ -127,6 +144,7 @@ export const statusType = (value: string) => {
       "待支付",
       "待开票",
       "开票中",
+      "待审批",
       "过期会员",
       "PENDING",
       "PAYING",
@@ -134,7 +152,11 @@ export const statusType = (value: string) => {
     ].includes(value)
   )
     return "warning";
-  if (["停用", "已取消", "REJECTED", "CANCELED", "CANCELLED"].includes(value))
+  if (
+    ["停用", "已取消", "已拒绝", "REJECTED", "CANCELED", "CANCELLED"].includes(
+      value
+    )
+  )
     return "danger";
   return "primary";
 };

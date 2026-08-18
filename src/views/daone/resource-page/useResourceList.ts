@@ -21,6 +21,7 @@ import {
   materialStatusOptions,
   orderPayTypeOptions,
   orderStatusOptions,
+  trialApplicationStatusOptions,
   userSubscriptionStatusOptions
 } from "./resourceFormatters";
 import {
@@ -188,6 +189,9 @@ export const useResourceList = (options: UseResourceListOptions) => {
     if (resourceKey.value === "invoices") {
       return invoiceStatusOptions;
     }
+    if (resourceKey.value === "trialApplications") {
+      return trialApplicationStatusOptions;
+    }
     if (resourceKey.value === "users") {
       return userSubscriptionStatusOptions;
     }
@@ -348,6 +352,13 @@ export const useResourceList = (options: UseResourceListOptions) => {
         const orderParams = buildOrderQueryParams();
         items = await fetchPaginatedResource(params =>
           adminApi.orders({ ...orderParams, ...params })
+        );
+      } else if (apiResource === "trialApplications") {
+        items = await fetchPaginatedResource(params =>
+          adminApi.trialApplications({
+            ...params,
+            ...(statusFilter.value ? { status: statusFilter.value } : {})
+          })
         );
       } else if (apiResource === "plans") {
         items = normalizeList(await adminApi.plans());

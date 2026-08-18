@@ -105,7 +105,9 @@ const {
   openDetail,
   openUserProjectCanvas,
   openPoints,
-  adjustPoints
+  adjustPoints,
+  approveTrialApplication,
+  rejectTrialApplication
 } = crud;
 
 const {
@@ -192,6 +194,8 @@ const setTableRef = (instance: any) => {
         @open-editor="openEditor"
         @open-points="openPoints"
         @toggle-status="toggleStatus"
+        @review-approve="approveTrialApplication"
+        @review-reject="rejectTrialApplication"
         @remove="remove"
       />
     </section>

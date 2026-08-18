@@ -35,7 +35,13 @@ defineEmits<{
       </div>
       <div>
         <h3>
-          {{ current.planName || current.name || current.title || current.id }}
+          {{
+            current.planName ||
+            current.name ||
+            current.title ||
+            current.contactName ||
+            current.id
+          }}
         </h3>
         <p>{{ current.id }}</p>
       </div>

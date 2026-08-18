@@ -4,6 +4,7 @@ import { useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
 import {
   adminApi,
+  type AdminTrialStats,
   type DashboardQuickEntry,
   type DashboardResponse,
   type DashboardTrendPoint
@@ -17,6 +18,7 @@ const userStore = useUserStoreHook();
 const period = ref("近 7 天");
 const loading = ref(false);
 const dashboardData = ref<DashboardResponse | null>(null);
+const trialStatsData = ref<AdminTrialStats | null>(null);
 
 const metricMeta = [
   {
@@ -50,6 +52,33 @@ const metricMeta = [
     icon: "ri:sparkling-2-line",
     color: "#e17055",
     format: (value: number) => value.toLocaleString("zh-CN")
+  }
+] as const;
+
+const trialMetricMeta = [
+  {
+    key: "total",
+    label: "总申请数",
+    icon: "ri:file-list-3-line",
+    color: "#6c5ce7"
+  },
+  {
+    key: "pending",
+    label: "待审批数",
+    icon: "ri:time-line",
+    color: "#fdcb6e"
+  },
+  {
+    key: "approved",
+    label: "已通过数",
+    icon: "ri:checkbox-circle-line",
+    color: "#00b894"
+  },
+  {
+    key: "rejected",
+    label: "已拒绝数",
+    icon: "ri:close-circle-line",
+    color: "#e17055"
   }
 ] as const;
 
@@ -162,6 +191,13 @@ const formatChange = (change: number) => {
   return `${prefix}${change.toFixed(1)}%`;
 };
 
+const trialMetrics = computed(() =>
+  trialMetricMeta.map(item => ({
+    ...item,
+    value: Number(trialStatsData.value?.[item.key] ?? 0).toLocaleString("zh-CN")
+  }))
+);
+
 const metrics = computed(() => {
   const overview = dashboardData.value?.overview;
   return metricMeta.map(item => {
@@ -246,9 +282,20 @@ const trendBars = computed(() => {
 const fetchDashboard = async () => {
   loading.value = true;
   try {
-    dashboardData.value = await adminApi.dashboard();
-  } catch (error: any) {
-    ElMessage.warning(error?.message || "首页数据加载失败");
+    const [dashboardResult, trialStatsResult] = await Promise.allSettled([
+      adminApi.dashboard(),
+      adminApi.trialApplicationStats()
+    ]);
+
+    if (dashboardResult.status === "fulfilled") {
+      dashboardData.value = dashboardResult.value;
+    } else {
+      ElMessage.warning(dashboardResult.reason?.message || "首页数据加载失败");
+    }
+
+    if (trialStatsResult.status === "fulfilled") {
+      trialStatsData.value = trialStatsResult.value;
+    }
   } finally {
     loading.value = false;
   }
@@ -288,6 +335,40 @@ onMounted(() => {
           </small>
         </div>
       </article>
+    </section>
+
+    <section class="trial-stats">
+      <div class="panel-head trial-stats-head">
+        <div>
+          <h2>体验申请统计</h2>
+          <p>试用申请审批概况</p>
+        </div>
+        <el-button
+          link
+          type="primary"
+          @click="router.push('/finance/trial-applications')"
+        >
+          查看全部
+        </el-button>
+      </div>
+      <div class="metric-grid trial-metric-grid">
+        <article
+          v-for="item in trialMetrics"
+          :key="item.label"
+          class="metric-card"
+        >
+          <div
+            class="metric-icon"
+            :style="{ color: item.color, background: item.color + '14' }"
+          >
+            <IconifyIconOnline :icon="item.icon" />
+          </div>
+          <div>
+            <span>{{ item.label }}</span>
+            <strong>{{ item.value }}</strong>
+          </div>
+        </article>
+      </div>
     </section>
 
     <section class="main-grid">
@@ -424,6 +505,18 @@ onMounted(() => {
   grid-template-columns: repeat(4, 1fr);
   gap: 16px;
   margin: 16px 0;
+}
+
+.trial-stats {
+  margin-bottom: 16px;
+}
+
+.trial-stats-head {
+  margin-bottom: 12px;
+}
+
+.trial-metric-grid {
+  margin: 0;
 }
 
 .metric-card {

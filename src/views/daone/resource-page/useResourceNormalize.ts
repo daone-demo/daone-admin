@@ -3,7 +3,8 @@ import {
   buildPlanPriceItems,
   formatInvoiceStatus,
   formatOrderPayType,
-  formatOrderStatus
+  formatOrderStatus,
+  formatTrialApplicationStatus
 } from "./resourceFormatters";
 
 export const normalizeList = (payload: any) =>
@@ -102,6 +103,19 @@ export const normalizeRemoteRows = (items: any[], resourceKey: string) => {
       amountYuan: Number(item.amountFen || 0) / 100,
       statusRaw: String(item.status || ""),
       status: formatInvoiceStatus(item.status)
+    }));
+  } else if (resourceKey === "trialApplications") {
+    rows = items.map(item => ({
+      ...item,
+      id: String(item.id ?? ""),
+      contactName: String(item.contactName || ""),
+      phone: String(item.phone || ""),
+      position: String(item.position || "-"),
+      userId: item.userId ?? "-",
+      rejectReason: String(item.rejectReason || "-"),
+      reviewedBy: item.reviewedBy ?? "-",
+      statusRaw: String(item.status || ""),
+      status: formatTrialApplicationStatus(item.status)
     }));
   } else if (resourceKey === "plans") {
     rows = items.map(plan => {

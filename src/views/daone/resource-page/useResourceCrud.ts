@@ -688,6 +688,73 @@ export const useResourceCrud = (options: UseResourceCrudOptions) => {
     pointsVisible.value = true;
   };
 
+  const isPendingTrialApplication = (row: Record<string, any>) =>
+    String(row.statusRaw || "").toUpperCase() === "PENDING";
+
+  const reviewTrialApplication = async (
+    row: Record<string, any>,
+    status: "APPROVED" | "REJECTED",
+    rejectReason?: string
+  ) => {
+    if (!canCallManagementApi()) return;
+    if (!isPendingTrialApplication(row)) {
+      ElMessage.warning("仅待审批申请可操作");
+      return;
+    }
+    try {
+      await adminApi.reviewTrialApplication(row.id, {
+        status,
+        ...(status === "REJECTED" ? { rejectReason } : {})
+      });
+    } catch (error: any) {
+      ElMessage.error(error?.message || "审批失败");
+      return;
+    }
+    ElMessage.success(
+      status === "APPROVED" ? "已通过试用申请" : "已拒绝试用申请"
+    );
+    await loadRemote();
+  };
+
+  const approveTrialApplication = async (row: Record<string, any>) => {
+    try {
+      await ElMessageBox.confirm(
+        `确认通过「${row.contactName || row.phone || row.id}」的试用申请？`,
+        "审核通过",
+        {
+          type: "warning",
+          confirmButtonText: "通过",
+          cancelButtonText: "取消"
+        }
+      );
+    } catch {
+      return;
+    }
+    await reviewTrialApplication(row, "APPROVED");
+  };
+
+  const rejectTrialApplication = async (row: Record<string, any>) => {
+    let rejectReason = "";
+    try {
+      const result = await ElMessageBox.prompt(
+        "拒绝后将无法再次审批，请填写拒绝原因",
+        "拒绝试用申请",
+        {
+          confirmButtonText: "确认拒绝",
+          cancelButtonText: "取消",
+          inputType: "textarea",
+          inputPlaceholder: "请填写拒绝原因",
+          inputValidator: value =>
+            Boolean(String(value || "").trim()) || "请填写拒绝原因"
+        }
+      );
+      rejectReason = String(result.value || "").trim();
+    } catch {
+      return;
+    }
+    await reviewTrialApplication(row, "REJECTED", rejectReason);
+  };
+
   const adjustPoints = () =>
     withAdjustLock(async () => {
       if (!canCallManagementApi()) return;
@@ -738,7 +805,9 @@ export const useResourceCrud = (options: UseResourceCrudOptions) => {
     loadUserProjects,
     openUserProjectCanvas,
     openPoints,
-    adjustPoints
+    adjustPoints,
+    approveTrialApplication,
+    rejectTrialApplication
   };
 };
 

@@ -60,6 +60,13 @@ export interface DashboardResponse {
   trends?: DashboardTrendPoint[];
 }
 
+export interface AdminTrialStats {
+  approved?: number;
+  pending?: number;
+  rejected?: number;
+  total?: number;
+}
+
 const client = axios.create({
   // 本地开发用相对路径走 Vite proxy；线上打包注入完整 API 地址直连
   baseURL:
@@ -243,6 +250,33 @@ export const adminApi = {
   orderDetail(orderNo: string) {
     return unwrap(
       client.get(`/admin/v1/orders/${encodeURIComponent(orderNo)}`)
+    );
+  },
+  trialApplications(
+    params: {
+      page?: number;
+      pageSize?: number;
+      status?: string;
+    } = {}
+  ) {
+    return unwrap(
+      client.get("/admin/v1/trial-applications", { params })
+    ) as Promise<AdminPage>;
+  },
+  trialApplicationStats() {
+    return unwrap(
+      client.get("/admin/v1/trial-applications/stats")
+    ) as Promise<AdminTrialStats>;
+  },
+  reviewTrialApplication(
+    id: string | number,
+    data: { status: "APPROVED" | "REJECTED"; rejectReason?: string }
+  ) {
+    return unwrap(
+      client.put(
+        `/admin/v1/trial-applications/${encodeURIComponent(String(id))}/review`,
+        data
+      )
     );
   },
   plans() {
