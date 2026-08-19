@@ -361,8 +361,6 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
     allowCreate: false,
     allowDelete: false,
     allowStatus: false,
-    searchable: ["contactName", "phone", "position", "id", "userId"],
-    searchPlaceholder: "搜索联系人、手机号或用户 ID",
     fields: [],
     columns: [
       { key: "contactName", label: "公司/联系人" },

@@ -657,6 +657,7 @@ export const useResourceList = (options: UseResourceListOptions) => {
         return;
       }
       if (reloadGate.suspended) return;
+      if (!(config.value?.searchable || []).length) return;
       if (useServerFilters() || useServerPagination()) {
         currentPage.value = 1;
         scheduleLoadRemote();

@@ -36,7 +36,7 @@ const modelDateRange = defineModel<[string, string] | null>("modelDateRange", {
 <template>
   <div class="toolbar">
     <el-input
-      v-if="!isContentListResource"
+      v-if="!isContentListResource && config.searchable?.length"
       v-model="keyword"
       clearable
       class="search"
