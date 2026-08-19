@@ -10,7 +10,7 @@ pnpm dev          # 开发模式（.env.development）
 pnpm dev:test     # 测试上游
 ```
 
-要求：Node.js `^20.19 || >=22.13`，pnpm `>=9`（推荐 pnpm 11，配置见 `pnpm-workspace.yaml`）。
+要求：Node.js `^20.19 || >=22.13`，**pnpm 11**（`package.json` 的 `packageManager` / `engines.pnpm` 已钉死主版本；安装与构建脚本白名单见 `pnpm-workspace.yaml`，不要再写 `package.json#pnpm`）。
 
 ## Daone 环境与部署说明
 

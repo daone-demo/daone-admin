@@ -1,4 +1,5 @@
-# Daone 单包 workspace 根（pnpm v11+ 配置迁入此文件，不再使用 package.json#pnpm）
+# Daone 单包 workspace 根。pnpm 主版本固定为 11（见 package.json#packageManager / engines.pnpm）。
+# 配置只写在本文件；pnpm 11 会忽略 package.json#pnpm，请勿再加回去。
 packages:
   - "."
 
@@ -16,7 +17,7 @@ allowBuilds:
   vue-demi: true
   "@tailwindcss/oxide": false
 
-# 历史弃用包告警抑制（原 package.json#pnpm.allowedDeprecatedVersions）
+# 历史弃用包告警抑制
 allowedDeprecatedVersions:
   are-we-there-yet: "*"
   sourcemap-codec: "*"
