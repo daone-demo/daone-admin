@@ -1,8 +1,13 @@
 export type ModelPriceTable = Record<string, number>;
 
+export type ModelPricingEntry = {
+  priceTable?: ModelPriceTable;
+  base?: number;
+};
+
 export type ModelPricingConfig = {
   priceMode?: string;
-  models?: Record<string, { priceTable?: ModelPriceTable }>;
+  models?: Record<string, ModelPricingEntry>;
   priceTable?: ModelPriceTable;
 };
 
@@ -12,7 +17,7 @@ export type ParameterModelOption = {
   resolution?: Array<{ label?: string; value?: string } | string>;
 };
 
-/** 是否为表格式定价（文生图/视频/画质增强） */
+/** 是否配置了 attributes.pricing.models / priceTable */
 export function hasModelPricingTable(
   pricing: ModelPricingConfig | null | undefined
 ): boolean {
@@ -24,6 +29,17 @@ export function hasModelPricingTable(
     return Object.keys(pricing.priceTable).length > 0;
   }
   return false;
+}
+
+/** 仅编辑 pricing.models（文生图/视频等按模型定价） */
+export function hasPricingModels(
+  pricing: ModelPricingConfig | null | undefined
+): boolean {
+  return Boolean(
+    pricing?.models &&
+      typeof pricing.models === "object" &&
+      Object.keys(pricing.models).length > 0
+  );
 }
 
 export function cloneModelPricing(
@@ -52,6 +68,7 @@ function resolveTierLabel(
   tierKey: string,
   parameterModels?: ParameterModelOption[]
 ): string {
+  if (tierKey === "base") return "基础积分";
   const matched = (parameterModels || []).find(
     item => String(item?.value || "") === modelKey
   );
@@ -74,7 +91,29 @@ export type PricingEditorGroup = {
   rows: Array<{ key: string; label: string; points: number }>;
 };
 
-/** 将 pricing 转为可编辑分组列表 */
+function buildModelEntryRows(
+  modelKey: string,
+  entry: ModelPricingEntry | undefined,
+  parameterModels?: ParameterModelOption[]
+): Array<{ key: string; label: string; points: number }> {
+  const table = entry?.priceTable;
+  if (table && typeof table === "object" && Object.keys(table).length > 0) {
+    return Object.keys(table).map(key => ({
+      key,
+      label: resolveTierLabel(modelKey, key, parameterModels),
+      points: Number(table[key] ?? 0)
+    }));
+  }
+  return [
+    {
+      key: "base",
+      label: "基础积分",
+      points: Number(entry?.base ?? 0)
+    }
+  ];
+}
+
+/** 将 pricing 转为可编辑分组列表（优先 models） */
 export function buildPricingEditorGroups(
   pricing: ModelPricingConfig | null | undefined,
   parameterModels?: ParameterModelOption[]
@@ -82,19 +121,15 @@ export function buildPricingEditorGroups(
   if (!pricing) return [];
 
   if (pricing.models && typeof pricing.models === "object") {
-    return Object.keys(pricing.models).map(modelKey => {
-      const table = pricing.models?.[modelKey]?.priceTable || {};
-      const keys = Object.keys(table);
-      return {
+    return Object.keys(pricing.models).map(modelKey => ({
+      modelKey,
+      title: resolveModelLabel(modelKey, parameterModels),
+      rows: buildModelEntryRows(
         modelKey,
-        title: resolveModelLabel(modelKey, parameterModels),
-        rows: keys.map(key => ({
-          key,
-          label: resolveTierLabel(modelKey, key, parameterModels),
-          points: Number(table[key] ?? 0)
-        }))
-      };
-    });
+        pricing.models?.[modelKey],
+        parameterModels
+      )
+    }));
   }
 
   if (pricing.priceTable && typeof pricing.priceTable === "object") {
@@ -114,7 +149,7 @@ export function buildPricingEditorGroups(
   return [];
 }
 
-/** 回写某一档位积分，返回新的 pricing */
+/** 回写某一档位积分，返回新的 pricing（保持原有 base / priceTable 结构） */
 export function updatePricingPoints(
   pricing: ModelPricingConfig,
   modelKey: string | null,
@@ -125,12 +160,29 @@ export function updatePricingPoints(
   const value = Number.isFinite(points) ? Math.max(0, Math.round(points)) : 0;
 
   if (modelKey && next.models?.[modelKey]) {
+    const prev = next.models[modelKey] || {};
+    const hasPriceTable =
+      prev.priceTable &&
+      typeof prev.priceTable === "object" &&
+      Object.keys(prev.priceTable).length > 0;
+
+    if (tierKey === "base" && !hasPriceTable) {
+      next.models = {
+        ...next.models,
+        [modelKey]: {
+          ...prev,
+          base: value
+        }
+      };
+      return next;
+    }
+
     next.models = {
       ...next.models,
       [modelKey]: {
-        ...next.models[modelKey],
+        ...prev,
         priceTable: {
-          ...(next.models[modelKey].priceTable || {}),
+          ...(prev.priceTable || {}),
           [tierKey]: value
         }
       }

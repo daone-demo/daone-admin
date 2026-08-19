@@ -24,6 +24,7 @@ const priceModeLabel = computed(() => {
   const mode = String(props.modelValue?.priceMode || "").toLowerCase();
   if (mode === "video") return "视频定价（单价 × 秒数）";
   if (mode === "image") return "图片定价（按分辨率单价）";
+  if (props.modelValue?.models) return "按模型设置积分";
   return "积分定价";
 });
 

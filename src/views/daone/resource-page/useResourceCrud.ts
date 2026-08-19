@@ -22,7 +22,11 @@ import {
   validatePlanPriceItems,
   type PlanPriceFormItem
 } from "./planPriceForm";
-import { cloneModelPricing, hasModelPricingTable } from "./modelPricing";
+import {
+  cloneModelPricing,
+  hasModelPricingTable,
+  hasPricingModels
+} from "./modelPricing";
 import { sanitizeNotificationHtml } from "@/utils/sanitizeHtml";
 
 export interface UseResourceCrudOptions {
@@ -100,11 +104,14 @@ export const useResourceCrud = (options: UseResourceCrudOptions) => {
       fields = fields.filter(field => !field.createOnly);
     }
     if (resourceKey.value === "models") {
-      const useTablePricing = hasModelPricingTable(form.pricing);
-      const hasParamModels = Array.isArray(current.value?.parameters?.models);
-      if (useTablePricing) {
+      // 有 attributes.pricing.models 时只展示模型积分，其余表单字段全部隐藏
+      if (hasPricingModels(form.pricing)) {
+        return [];
+      }
+      if (hasModelPricingTable(form.pricing)) {
         fields = fields.filter(field => field.key !== "basePoints");
       }
+      const hasParamModels = Array.isArray(current.value?.parameters?.models);
       if (hasParamModels) {
         fields = fields.filter(
           field => field.key !== "countMin" && field.key !== "countMax"
@@ -263,17 +270,20 @@ export const useResourceCrud = (options: UseResourceCrudOptions) => {
           ? { ...current.value.parameters }
           : {};
       const hasParamModels = Array.isArray(existingParameters.models);
+      const usePricingModels = hasPricingModels(form.pricing);
       const useTablePricing = hasModelPricingTable(form.pricing);
 
-      const parameters = hasParamModels
-        ? existingParameters
-        : {
-            ...existingParameters,
-            count: {
-              min: Number(form.countMin || 1),
-              max: Number(form.countMax || 1)
-            }
-          };
+      // pricing.models / parameters.models 驱动的能力：保留原 parameters，不写 count
+      const parameters =
+        hasParamModels || usePricingModels
+          ? existingParameters
+          : {
+              ...existingParameters,
+              count: {
+                min: Number(form.countMin || 1),
+                max: Number(form.countMax || 1)
+              }
+            };
 
       const payload: Record<string, any> = {
         basePoints: useTablePricing ? 0 : Number(form.basePoints || 0),
