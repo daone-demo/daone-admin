@@ -2,9 +2,12 @@
 import type { ResourceConfig, ResourceField } from "../../resourceData";
 import type { BatchMediaItem } from "../useBatchMediaUpload";
 import type { PlanPriceFormItem } from "../planPriceForm";
+import type { ModelPricingConfig } from "../modelPricing";
+import { hasModelPricingTable } from "../modelPricing";
 import { defineAsyncComponent } from "vue";
 import BatchMediaUploadField from "./BatchMediaUploadField.vue";
 import PlanPricesEditor from "./PlanPricesEditor.vue";
+import ModelPricingEditor from "./ModelPricingEditor.vue";
 import SingleMediaUploadField from "./SingleMediaUploadField.vue";
 
 const ResourceRichTextEditor = defineAsyncComponent(
@@ -48,6 +51,7 @@ defineEmits<{
   save: [];
   "update:form-value": [key: string, value: any];
   "update:price-items": [value: PlanPriceFormItem[]];
+  "update:pricing": [value: ModelPricingConfig];
   "batch-drop": [field: ResourceField, event: DragEvent];
   "select-batch-files": [field: ResourceField];
   "select-batch-folder": [field: ResourceField];
@@ -65,7 +69,9 @@ defineEmits<{
         : config.createText || '新增记录'
     "
     :width="
-      resourceKey === 'plans' || resourceKey === 'notifications'
+      resourceKey === 'plans' ||
+      resourceKey === 'notifications' ||
+      (resourceKey === 'models' && hasModelPricingTable(form.pricing))
         ? '720px'
         : '560px'
     "
@@ -157,6 +163,18 @@ defineEmits<{
           :rows="4"
           :placeholder="`请输入${field.label}`"
           @update:model-value="$emit('update:form-value', field.key, $event)"
+        />
+      </el-form-item>
+
+      <el-form-item
+        v-if="resourceKey === 'models' && hasModelPricingTable(form.pricing)"
+        label="模型积分"
+        required
+      >
+        <ModelPricingEditor
+          :model-value="form.pricing"
+          :parameter-models="form.parameterModels || []"
+          @update:model-value="$emit('update:pricing', $event)"
         />
       </el-form-item>
 

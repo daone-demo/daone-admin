@@ -22,6 +22,7 @@ import {
   validatePlanPriceItems,
   type PlanPriceFormItem
 } from "./planPriceForm";
+import { cloneModelPricing, hasModelPricingTable } from "./modelPricing";
 
 export interface UseResourceCrudOptions {
   resourceKey: ComputedRef<string> | Ref<string>;
@@ -90,9 +91,21 @@ export const useResourceCrud = (options: UseResourceCrudOptions) => {
   };
 
   const editorFields = computed(() => {
-    const fields = (config.value?.fields || []).filter(field => !field.hidden);
+    let fields = (config.value?.fields || []).filter(field => !field.hidden);
     if (editingId.value) {
-      return fields.filter(field => !field.createOnly);
+      fields = fields.filter(field => !field.createOnly);
+    }
+    if (resourceKey.value === "models") {
+      const useTablePricing = hasModelPricingTable(form.pricing);
+      const hasParamModels = Array.isArray(current.value?.parameters?.models);
+      if (useTablePricing) {
+        fields = fields.filter(field => field.key !== "basePoints");
+      }
+      if (hasParamModels) {
+        fields = fields.filter(
+          field => field.key !== "countMin" && field.key !== "countMax"
+        );
+      }
     }
     return fields;
   });
@@ -173,6 +186,31 @@ export const useResourceCrud = (options: UseResourceCrudOptions) => {
         form.priceItems = [createEmptyPlanPriceItem()];
       }
     }
+    if (resourceKey.value === "models") {
+      let source = row || {};
+      if (row?.modelCode) {
+        try {
+          const detail = await adminApi.modelDetail(String(row.modelCode));
+          if (detail && typeof detail === "object") {
+            source = { ...row, ...(detail as Record<string, any>) };
+            current.value = source;
+            if (source.basePoints !== undefined) {
+              form.basePoints = source.basePoints;
+            }
+            if (source.parameters?.count) {
+              form.countMin = source.parameters.count.min ?? form.countMin;
+              form.countMax = source.parameters.count.max ?? form.countMax;
+            }
+          }
+        } catch (error) {
+          console.warn("[models] load detail failed", error);
+        }
+      }
+      form.pricing = cloneModelPricing(source?.attributes?.pricing);
+      form.parameterModels = Array.isArray(source?.parameters?.models)
+        ? source.parameters.models
+        : [];
+    }
     dialogVisible.value = true;
   };
 
@@ -194,27 +232,44 @@ export const useResourceCrud = (options: UseResourceCrudOptions) => {
       return payload;
     }
     if (resourceKey.value === "models") {
-      const parameters =
-        form.countMin || form.countMax
-          ? {
-              count: {
-                min: Number(form.countMin || 1),
-                max: Number(form.countMax || 1)
-              }
-            }
+      const existingParameters =
+        current.value?.parameters &&
+        typeof current.value.parameters === "object"
+          ? { ...current.value.parameters }
           : {};
-      const payload = {
-        basePoints: Number(form.basePoints || 0),
+      const hasParamModels = Array.isArray(existingParameters.models);
+      const useTablePricing = hasModelPricingTable(form.pricing);
+
+      const parameters = hasParamModels
+        ? existingParameters
+        : {
+            ...existingParameters,
+            count: {
+              min: Number(form.countMin || 1),
+              max: Number(form.countMax || 1)
+            }
+          };
+
+      const payload: Record<string, any> = {
+        basePoints: useTablePricing ? 0 : Number(form.basePoints || 0),
         parameters
       };
+
+      if (useTablePricing && form.pricing) {
+        payload.attributes = {
+          pricing: cloneModelPricing(form.pricing)
+        };
+      }
+
       if (!editingId.value) {
         return {
-          attributes: {},
+          attributes: payload.attributes || {},
           modelName: String(form.modelName || "").trim(),
           modelCode: String(form.modelCode || "").trim(),
           taskType: String(form.taskType || "IMAGE"),
           status: "ENABLED",
-          ...payload
+          basePoints: payload.basePoints,
+          parameters: payload.parameters
         };
       }
       return payload;

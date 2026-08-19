@@ -229,6 +229,7 @@ const setTableRef = (instance: any) => {
       :get-batch-item-display-progress="getBatchItemDisplayProgress"
       @update:form-value="(key, value) => (form[key] = value)"
       @update:price-items="value => (form.priceItems = value)"
+      @update:pricing="value => (form.pricing = value)"
       @save="save"
       @batch-drop="handleBatchDrop"
       @select-batch-files="triggerBatchFileSelect"
