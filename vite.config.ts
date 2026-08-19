@@ -105,6 +105,9 @@ export default ({ mode }: ConfigEnv): UserConfigExport => {
             ) {
               return "vendor-vue";
             }
+            if (id.includes("/@wangeditor/")) {
+              return "vendor-wangeditor";
+            }
             if (id.includes("/echarts/") || id.includes("/zrender/")) {
               return "vendor-echarts";
             }

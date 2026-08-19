@@ -2,9 +2,14 @@
 import type { ResourceConfig, ResourceField } from "../../resourceData";
 import type { BatchMediaItem } from "../useBatchMediaUpload";
 import type { PlanPriceFormItem } from "../planPriceForm";
+import { defineAsyncComponent } from "vue";
 import BatchMediaUploadField from "./BatchMediaUploadField.vue";
 import PlanPricesEditor from "./PlanPricesEditor.vue";
 import SingleMediaUploadField from "./SingleMediaUploadField.vue";
+
+const ResourceRichTextEditor = defineAsyncComponent(
+  () => import("./ResourceRichTextEditor.vue")
+);
 
 defineProps<{
   config: ResourceConfig;
@@ -59,7 +64,11 @@ defineEmits<{
         ? `编辑${config.title.replace('管理', '')}`
         : config.createText || '新增记录'
     "
-    :width="resourceKey === 'plans' ? '720px' : '560px'"
+    :width="
+      resourceKey === 'plans' || resourceKey === 'notifications'
+        ? '720px'
+        : '560px'
+    "
   >
     <el-form label-position="top">
       <el-form-item
@@ -98,7 +107,7 @@ defineEmits<{
             <el-option
               v-for="option in field.options"
               :key="option"
-              :label="option"
+              :label="field.optionLabels?.[option] || option"
               :value="option"
             />
           </template>
@@ -134,6 +143,12 @@ defineEmits<{
           @upload="
             (uploadField, file) => $emit('upload-file', uploadField, file)
           "
+        />
+        <ResourceRichTextEditor
+          v-else-if="field.type === 'richtext' && visible"
+          :model-value="String(form[field.key] || '')"
+          :placeholder="`请输入${field.label}`"
+          @update:model-value="$emit('update:form-value', field.key, $event)"
         />
         <el-input
           v-else

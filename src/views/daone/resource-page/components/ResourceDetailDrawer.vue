@@ -52,11 +52,18 @@ defineEmits<{
         :key="column.key"
         :label="column.label"
       >
-        {{
-          isDateTimeField(column.key)
-            ? formatDateTime(current[column.key])
-            : current[column.key]
-        }}
+        <div
+          v-if="column.key === 'content' && resourceKey === 'notifications'"
+          class="rich-content"
+          v-html="current[column.key]"
+        />
+        <template v-else>
+          {{
+            isDateTimeField(column.key)
+              ? formatDateTime(current[column.key])
+              : current[column.key]
+          }}
+        </template>
       </el-descriptions-item>
     </el-descriptions>
     <div v-if="resourceKey === 'plans'" class="detail-section">
@@ -156,6 +163,23 @@ defineEmits<{
 </template>
 
 <style scoped lang="scss">
+.rich-content {
+  line-height: 1.6;
+  word-break: break-word;
+
+  :deep(img) {
+    max-width: 100%;
+  }
+
+  :deep(p) {
+    margin: 0 0 8px;
+  }
+
+  :deep(a) {
+    color: var(--el-color-primary);
+  }
+}
+
 .detail-icon {
   display: grid;
   flex: 0 0 auto;

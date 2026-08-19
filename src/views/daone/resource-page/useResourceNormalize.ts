@@ -2,6 +2,8 @@ import { formatRecordDates } from "@/utils/date";
 import {
   buildPlanPriceItems,
   formatInvoiceStatus,
+  formatNotificationStatus,
+  formatNotificationType,
   formatOrderPayType,
   formatOrderStatus,
   formatTrialApplicationStatus
@@ -223,6 +225,22 @@ export const normalizeRemoteRows = (items: any[], resourceKey: string) => {
     });
   } else if (resourceKey === "categories") {
     rows = normalizeCategoryRows(items);
+  } else if (resourceKey === "notifications") {
+    rows = items.map(item => {
+      const statusRaw = String(item.status || "").toUpperCase();
+      return {
+        ...item,
+        id: String(item.id ?? ""),
+        title: String(item.title || ""),
+        content: String(item.content || ""),
+        type: String(item.type || "system"),
+        typeLabel: formatNotificationType(item.type),
+        statusRaw,
+        status: formatNotificationStatus(statusRaw),
+        publishedAt: item.publishedAt || "-",
+        createdBy: item.createdBy ?? "-"
+      };
+    });
   } else {
     rows = items.map(item => ({
       ...item,

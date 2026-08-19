@@ -653,5 +653,45 @@ export const adminApi = {
       previewUrl: string;
       url?: string;
     }>;
+  },
+  notifications(
+    params: {
+      page?: number;
+      pageSize?: number;
+    } = {}
+  ) {
+    return unwrap(client.get("/admin/v1/notifications", { params })) as Promise<
+      AdminPage | { items?: any[]; records?: any[] } | any[]
+    >;
+  },
+  createNotification(data: { title: string; content?: string; type?: string }) {
+    return unwrap(client.post("/admin/v1/notifications", data));
+  },
+  updateNotification(
+    id: string | number,
+    data: {
+      title?: string;
+      content?: string;
+      type?: string;
+    }
+  ) {
+    return unwrap(
+      client.put(
+        `/admin/v1/notifications/${encodeURIComponent(String(id))}`,
+        data
+      )
+    );
+  },
+  deleteNotification(id: string | number) {
+    return unwrap(
+      client.delete(`/admin/v1/notifications/${encodeURIComponent(String(id))}`)
+    );
+  },
+  publishNotification(id: string | number) {
+    return unwrap(
+      client.post(
+        `/admin/v1/notifications/${encodeURIComponent(String(id))}/publish`
+      )
+    );
   }
 };

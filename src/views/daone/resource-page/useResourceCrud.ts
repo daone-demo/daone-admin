@@ -10,6 +10,7 @@ import { ElMessage, ElMessageBox } from "element-plus";
 import { adminApi } from "@/api/admin";
 import { useSubmitLock } from "@/utils/submitLock";
 import type { ResourceConfig } from "../resourceData";
+import { isRequiredFieldEmpty } from "./resourceFieldUtils";
 import type { BatchMediaUploadState } from "./useBatchMediaUpload";
 import type { ResourceListState } from "./useResourceList";
 import { normalizeList } from "./useResourceNormalize";
@@ -109,11 +110,31 @@ export const useResourceCrud = (options: UseResourceCrudOptions) => {
   });
 
   const openEditor = async (row?: Record<string, any>) => {
+    if (
+      row &&
+      resourceKey.value === "notifications" &&
+      String(row.statusRaw || "").toUpperCase() === "PUBLISHED"
+    ) {
+      ElMessage.warning("已发布的消息不可编辑，仅草稿可修改");
+      return;
+    }
     editingId.value = row?.id || "";
     current.value = row || {};
     Object.keys(form).forEach(key => delete form[key]);
     config.value.fields.forEach(field => {
-      form[field.key] = row?.[field.key] ?? (field.type === "number" ? 0 : "");
+      if (row?.[field.key] !== undefined && row?.[field.key] !== null) {
+        form[field.key] = row[field.key];
+        return;
+      }
+      if (
+        resourceKey.value === "notifications" &&
+        field.key === "type" &&
+        !row
+      ) {
+        form[field.key] = "system";
+        return;
+      }
+      form[field.key] = field.type === "number" ? 0 : "";
     });
     resetInspirationMedia();
     resetMaterialMedia();
@@ -316,8 +337,8 @@ export const useResourceCrud = (options: UseResourceCrudOptions) => {
         ElMessage.warning("媒体上传中，请稍候");
         return;
       }
-      const missing = editorFields.value.find(
-        field => field.required && !String(form[field.key] ?? "").trim()
+      const missing = editorFields.value.find(field =>
+        isRequiredFieldEmpty(field, form[field.key])
       );
       if (missing) {
         ElMessage.warning(`请填写${missing.label}`);
@@ -487,6 +508,19 @@ export const useResourceCrud = (options: UseResourceCrudOptions) => {
               ? await adminApi.updateInvoice(editingId.value, payload)
               : await adminApi.createInvoice(payload);
             handled = true;
+          } else if (resourceKey.value === "notifications") {
+            const notificationPayload = {
+              title: String(form.title || "").trim(),
+              content: String(form.content || ""),
+              type: String(form.type || "system")
+            };
+            editingId.value
+              ? await adminApi.updateNotification(
+                  editingId.value,
+                  notificationPayload
+                )
+              : await adminApi.createNotification(notificationPayload);
+            handled = true;
           }
 
           if (!handled) {
@@ -562,6 +596,8 @@ export const useResourceCrud = (options: UseResourceCrudOptions) => {
         await adminApi.deleteCategory(String(row.id));
       } else if (resourceKey.value === "pointPackages") {
         await adminApi.deletePointPackage(String(row.id));
+      } else if (resourceKey.value === "notifications") {
+        await adminApi.deleteNotification(String(row.id));
       } else {
         ElMessage.error("当前资源不支持删除");
         return;
@@ -750,6 +786,26 @@ export const useResourceCrud = (options: UseResourceCrudOptions) => {
     await loadRemote();
   };
 
+  const publishNotification = async (row: Record<string, any>) => {
+    if (!canCallManagementApi()) return;
+    if (String(row.statusRaw || "").toUpperCase() !== "DRAFT") {
+      ElMessage.warning("仅草稿消息可以发布");
+      return;
+    }
+    await ElMessageBox.confirm(
+      `确定发布「${row.title || row.id}」吗？发布后将不可再编辑。`,
+      "发布确认",
+      { type: "warning" }
+    );
+    try {
+      await adminApi.publishNotification(String(row.id));
+      await loadRemote();
+      ElMessage.success("发布成功");
+    } catch (error: any) {
+      ElMessage.error(error?.message || "发布失败");
+    }
+  };
+
   const approveTrialApplication = async (row: Record<string, any>) => {
     try {
       await ElMessageBox.confirm(
@@ -841,7 +897,8 @@ export const useResourceCrud = (options: UseResourceCrudOptions) => {
     openPoints,
     adjustPoints,
     approveTrialApplication,
-    rejectTrialApplication
+    rejectTrialApplication,
+    publishNotification
   };
 };
 

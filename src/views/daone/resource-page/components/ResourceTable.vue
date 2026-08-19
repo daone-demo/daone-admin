@@ -36,6 +36,7 @@ const emit = defineEmits<{
   "toggle-status": [row: Record<string, any>];
   "review-approve": [row: Record<string, any>];
   "review-reject": [row: Record<string, any>];
+  "publish-notification": [row: Record<string, any>];
   remove: [row: Record<string, any>];
 }>();
 </script>
@@ -244,7 +245,13 @@ const emit = defineEmits<{
             ? 260
             : 230
       "
-      :min-width="isTableFullWidth ? 220 : undefined"
+      :min-width="
+        isTableFullWidth
+          ? resourceKey === 'notifications'
+            ? 280
+            : 220
+          : undefined
+      "
       align="right"
     >
       <template #default="{ row }">
@@ -276,6 +283,32 @@ const emit = defineEmits<{
               @click="emit('review-reject', row)"
             >
               拒绝
+            </el-button>
+          </template>
+          <template v-else-if="resourceKey === 'notifications'">
+            <el-button
+              v-if="row.statusRaw === 'DRAFT'"
+              link
+              type="primary"
+              @click="emit('open-editor', row)"
+            >
+              编辑
+            </el-button>
+            <el-button
+              v-if="row.statusRaw === 'DRAFT'"
+              link
+              type="success"
+              @click="emit('publish-notification', row)"
+            >
+              发布
+            </el-button>
+            <el-button
+              v-if="config.allowDelete !== false"
+              link
+              type="danger"
+              @click="emit('remove', row)"
+            >
+              删除
             </el-button>
           </template>
           <template

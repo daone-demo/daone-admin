@@ -1,10 +1,18 @@
-export type FieldType = "text" | "textarea" | "number" | "select" | "upload";
+export type FieldType =
+  | "text"
+  | "textarea"
+  | "richtext"
+  | "number"
+  | "select"
+  | "upload";
 
 export interface ResourceField {
   key: string;
   label: string;
   type?: FieldType;
   options?: string[];
+  /** select 选项展示文案，缺省时直接显示 options 值 */
+  optionLabels?: Record<string, string>;
   /** 动态选项来源 */
   optionsFrom?: "topLevelCategories" | "categoryList";
   required?: boolean;
@@ -33,7 +41,8 @@ export interface ResourceConfig {
     | "inspirations"
     | "categories"
     | "materials"
-    | "materialCategories";
+    | "materialCategories"
+    | "notifications";
   /** 分类资源的 scope，用于素材等业务隔离 */
   categoryScope?: "INSPIRATION" | "MATERIAL";
   allowCreate?: boolean;
@@ -479,6 +488,49 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
       { key: "level", label: "类目等级", width: 110 },
       { key: "sortNo", label: "排序" },
       { key: "status", label: "状态", width: 100 }
+    ]
+  },
+  notifications: {
+    title: "消息管理",
+    description: "维护系统通知草稿、发布与删除，支持系统/更新/活动分类",
+    icon: "ri:notification-3-line",
+    color: "#0984e3",
+    apiResource: "notifications",
+    hideMetrics: true,
+    tableFullWidth: true,
+    allowDelete: true,
+    allowStatus: false,
+    createText: "新建消息",
+    searchPlaceholder: "搜索标题或内容",
+    searchable: ["title", "content", "typeLabel"],
+    fields: [
+      { key: "title", label: "通知标题", required: true },
+      {
+        key: "type",
+        label: "通知分类",
+        type: "select",
+        options: ["system", "update", "activity"],
+        optionLabels: {
+          system: "系统",
+          update: "更新",
+          activity: "活动"
+        },
+        required: true
+      },
+      {
+        key: "content",
+        label: "通知内容",
+        type: "richtext",
+        required: true
+      }
+    ],
+    columns: [
+      { key: "title", label: "标题", minWidth: 180 },
+      { key: "typeLabel", label: "分类", width: 100 },
+      { key: "status", label: "状态", width: 100 },
+      { key: "publishedAt", label: "发布时间", minWidth: 160 },
+      { key: "updatedAt", label: "更新时间", minWidth: 160 },
+      { key: "createdAt", label: "创建时间", minWidth: 160 }
     ]
   }
 };

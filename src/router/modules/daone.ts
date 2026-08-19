@@ -136,6 +136,21 @@ export default [
     ]
   },
   {
+    path: "/messages",
+    name: "Messages",
+    component: Layout,
+    redirect: "/messages/list",
+    meta: { title: "消息管理", icon: "ri:notification-3-line", rank: 8 },
+    children: [
+      {
+        path: "/messages/list",
+        name: "MessageList",
+        component: ResourcePage,
+        meta: { title: "消息列表", resource: "notifications" }
+      }
+    ]
+  },
+  {
     path: "/finance",
     name: "Finance",
     component: Layout,

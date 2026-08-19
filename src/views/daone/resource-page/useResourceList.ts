@@ -19,6 +19,7 @@ import {
 import {
   invoiceStatusOptions,
   materialStatusOptions,
+  notificationStatusOptions,
   orderPayTypeOptions,
   orderStatusOptions,
   trialApplicationStatusOptions,
@@ -191,6 +192,9 @@ export const useResourceList = (options: UseResourceListOptions) => {
     }
     if (resourceKey.value === "trialApplications") {
       return trialApplicationStatusOptions;
+    }
+    if (resourceKey.value === "notifications") {
+      return notificationStatusOptions;
     }
     if (resourceKey.value === "users") {
       return userSubscriptionStatusOptions;
@@ -407,6 +411,10 @@ export const useResourceList = (options: UseResourceListOptions) => {
           );
           nextRemoteTotal = items.length;
         }
+      } else if (apiResource === "notifications") {
+        items = await fetchPaginatedResource(params =>
+          adminApi.notifications(params)
+        );
       }
       if (isStale()) return;
       if (nextRemoteTotal !== null) {
@@ -537,6 +545,18 @@ export const useResourceList = (options: UseResourceListOptions) => {
             column.key
           )
       );
+    }
+    if (resourceKey.value === "notifications") {
+      return [
+        { key: "title", label: "标题" },
+        { key: "typeLabel", label: "分类" },
+        { key: "status", label: "状态" },
+        { key: "content", label: "内容" },
+        { key: "publishedAt", label: "发布时间" },
+        { key: "createdAt", label: "创建时间" },
+        { key: "updatedAt", label: "更新时间" }
+        // { key: "createdBy", label: "创建管理员" }
+      ];
     }
     return columns;
   });

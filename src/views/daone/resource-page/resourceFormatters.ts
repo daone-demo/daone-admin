@@ -47,6 +47,22 @@ export const trialApplicationStatusOptions = [
   { label: "已拒绝", value: "REJECTED" }
 ];
 
+export const notificationStatusLabels: Record<string, string> = {
+  DRAFT: "草稿",
+  PUBLISHED: "已发布"
+};
+
+export const notificationStatusOptions = [
+  { label: "草稿", value: "DRAFT" },
+  { label: "已发布", value: "PUBLISHED" }
+];
+
+export const notificationTypeLabels: Record<string, string> = {
+  system: "系统",
+  update: "更新",
+  activity: "活动"
+};
+
 export const userSubscriptionStatusOptions = [
   { label: "会员", value: "ACTIVE" },
   { label: "非会员", value: "EXPIRED" }
@@ -79,6 +95,12 @@ export const formatInvoiceStatus = (value: string) =>
 
 export const formatTrialApplicationStatus = (value: string) =>
   trialApplicationStatusLabels[String(value || "").toUpperCase()] || value;
+
+export const formatNotificationStatus = (value: string) =>
+  notificationStatusLabels[String(value || "").toUpperCase()] || value;
+
+export const formatNotificationType = (value: string) =>
+  notificationTypeLabels[String(value || "").toLowerCase()] || value || "-";
 
 export const formatMaterialType = (value: string) =>
   materialTypeLabels[String(value || "").toUpperCase()] || value;
@@ -135,7 +157,8 @@ export const statusType = (value: string) => {
       "ENABLED",
       "ISSUED",
       "APPROVED",
-      "已通过"
+      "已通过",
+      "已发布"
     ].includes(value)
   )
     return "success";
@@ -148,7 +171,8 @@ export const statusType = (value: string) => {
       "过期会员",
       "PENDING",
       "PAYING",
-      "PROCESSING"
+      "PROCESSING",
+      "草稿"
     ].includes(value)
   )
     return "warning";

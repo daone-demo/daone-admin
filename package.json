@@ -85,6 +85,8 @@
     "responsive-storage": "^2.2.0",
     "sortablejs": "^1.15.6",
     "tippy.js": "^6.3.7",
+    "@wangeditor/editor": "^5.1.23",
+    "@wangeditor/editor-for-vue": "^5.1.12",
     "vue": "^3.5.22",
     "vue-demi": "0.14.10",
     "vue-router": "^4.6.3",

@@ -107,7 +107,8 @@ const {
   openPoints,
   adjustPoints,
   approveTrialApplication,
-  rejectTrialApplication
+  rejectTrialApplication,
+  publishNotification
 } = crud;
 
 const {
@@ -196,6 +197,7 @@ const setTableRef = (instance: any) => {
         @toggle-status="toggleStatus"
         @review-approve="approveTrialApplication"
         @review-reject="rejectTrialApplication"
+        @publish-notification="publishNotification"
         @remove="remove"
       />
     </section>
