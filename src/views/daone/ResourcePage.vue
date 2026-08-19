@@ -146,6 +146,7 @@ const setTableRef = (instance: any) => {
       </div>
 
       <ResourceToolbar
+        v-if="!config.hideToolbar"
         v-model:keyword="keyword"
         v-model:status-filter="statusFilter"
         v-model:category-filter="categoryFilter"

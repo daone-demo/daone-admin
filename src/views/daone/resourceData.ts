@@ -56,6 +56,8 @@ export interface ResourceConfig {
   treeMode?: boolean;
   /** 隐藏顶部统计卡片 */
   hideMetrics?: boolean;
+  /** 隐藏列表上方搜索/筛选工具栏 */
+  hideToolbar?: boolean;
   /** 搜索框占位文案 */
   searchPlaceholder?: string;
   /** 使用接口参数进行服务端筛选 */
@@ -497,12 +499,11 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
     color: "#0984e3",
     apiResource: "notifications",
     hideMetrics: true,
+    hideToolbar: true,
     tableFullWidth: true,
     allowDelete: true,
     allowStatus: false,
     createText: "新建消息",
-    searchPlaceholder: "搜索标题或内容",
-    searchable: ["title", "content", "typeLabel"],
     fields: [
       { key: "title", label: "通知标题", required: true },
       {
