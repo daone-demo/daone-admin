@@ -31,3 +31,10 @@ allowedDeprecatedVersions:
   gauge: "*"
   abab: "*"
   glob: "*"
+
+# P1-03：收敛传递依赖已知高危漏洞
+overrides:
+  lodash: ">=4.17.24"
+  lodash-es: ">=4.17.24"
+  defu: ">=6.1.5"
+  picomatch: ">=4.0.4"

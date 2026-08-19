@@ -156,7 +156,8 @@ class PureHttp {
     } as PureHttpRequestConfig;
 
     // 响应拦截器会返回 response.data，第二个泛型声明最终 Promise 的返回值
-    return PureHttp.axiosInstance.request<T, T>(config);
+    // axios 1.19+ 的 request 返回类型收紧为 AxiosResponseResult，此处与拦截器约定对齐
+    return PureHttp.axiosInstance.request<T, T>(config) as Promise<T>;
   }
 
   /** 单独抽离的`post`工具函数 */

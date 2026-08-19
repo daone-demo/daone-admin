@@ -23,6 +23,7 @@ import {
   type PlanPriceFormItem
 } from "./planPriceForm";
 import { cloneModelPricing, hasModelPricingTable } from "./modelPricing";
+import { sanitizeNotificationHtml } from "@/utils/sanitizeHtml";
 
 export interface UseResourceCrudOptions {
   resourceKey: ComputedRef<string> | Ref<string>;
@@ -80,6 +81,9 @@ export const useResourceCrud = (options: UseResourceCrudOptions) => {
     useSubmitLock();
   const userProjectsTracker = createLatestRequestTracker();
   const projectCanvasTracker = createLatestRequestTracker();
+  const modelDetailTracker = createLatestRequestTracker();
+  /** 当前编辑会话锁定的模型编码，避免迟到详情覆盖后写错对象 */
+  const editingModelCode = ref("");
 
   const canCallManagementApi = () => {
     if (!ensureAdminAuthenticated()) return false;
@@ -187,30 +191,51 @@ export const useResourceCrud = (options: UseResourceCrudOptions) => {
       }
     }
     if (resourceKey.value === "models") {
-      let source = row || {};
-      if (row?.modelCode) {
-        try {
-          const detail = await adminApi.modelDetail(String(row.modelCode));
-          if (detail && typeof detail === "object") {
-            source = { ...row, ...(detail as Record<string, any>) };
-            current.value = source;
-            if (source.basePoints !== undefined) {
-              form.basePoints = source.basePoints;
-            }
-            if (source.parameters?.count) {
-              form.countMin = source.parameters.count.min ?? form.countMin;
-              form.countMax = source.parameters.count.max ?? form.countMax;
-            }
-          }
-        } catch (error) {
-          console.warn("[models] load detail failed", error);
-        }
-      }
-      form.pricing = cloneModelPricing(source?.attributes?.pricing);
-      form.parameterModels = Array.isArray(source?.parameters?.models)
-        ? source.parameters.models
+      const requestedModelCode = String(row?.modelCode || "");
+      editingModelCode.value = requestedModelCode;
+      const isCurrent = modelDetailTracker.begin();
+
+      form.pricing = cloneModelPricing(row?.attributes?.pricing);
+      form.parameterModels = Array.isArray(row?.parameters?.models)
+        ? row.parameters.models
         : [];
+      dialogVisible.value = true;
+
+      if (!requestedModelCode) return;
+
+      try {
+        const detail = await adminApi.modelDetail(requestedModelCode);
+        if (
+          !isCurrent() ||
+          editingModelCode.value !== requestedModelCode ||
+          resourceKey.value !== "models"
+        ) {
+          return;
+        }
+        if (detail && typeof detail === "object") {
+          const source = { ...row, ...(detail as Record<string, any>) };
+          current.value = source;
+          if (source.basePoints !== undefined) {
+            form.basePoints = source.basePoints;
+          }
+          if (source.parameters?.count) {
+            form.countMin = source.parameters.count.min ?? form.countMin;
+            form.countMax = source.parameters.count.max ?? form.countMax;
+          }
+          form.pricing = cloneModelPricing(source?.attributes?.pricing);
+          form.parameterModels = Array.isArray(source?.parameters?.models)
+            ? source.parameters.models
+            : [];
+        }
+      } catch (error) {
+        if (!isCurrent()) return;
+        console.warn("[models] load detail failed", error);
+      }
+      return;
     }
+
+    editingModelCode.value = "";
+    modelDetailTracker.invalidate();
     dialogVisible.value = true;
   };
 
@@ -451,7 +476,11 @@ export const useResourceCrud = (options: UseResourceCrudOptions) => {
           } else if (resourceKey.value === "models") {
             editingId.value
               ? await adminApi.updateModel(
-                  String(current.value.modelCode),
+                  String(
+                    editingModelCode.value ||
+                      form.modelCode ||
+                      current.value.modelCode
+                  ),
                   payload
                 )
               : await adminApi.createModel(payload);
@@ -566,7 +595,7 @@ export const useResourceCrud = (options: UseResourceCrudOptions) => {
           } else if (resourceKey.value === "notifications") {
             const notificationPayload = {
               title: String(form.title || "").trim(),
-              content: String(form.content || ""),
+              content: sanitizeNotificationHtml(String(form.content || "")),
               type: String(form.type || "system")
             };
             editingId.value

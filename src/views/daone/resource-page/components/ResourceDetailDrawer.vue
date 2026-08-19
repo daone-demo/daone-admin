@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { ResourceConfig } from "../../resourceData";
+import { sanitizeNotificationHtml } from "@/utils/sanitizeHtml";
 
 defineProps<{
   current: Record<string, any>;
@@ -55,7 +56,7 @@ defineEmits<{
         <div
           v-if="column.key === 'content' && resourceKey === 'notifications'"
           class="rich-content"
-          v-html="current[column.key]"
+          v-html="sanitizeNotificationHtml(String(current[column.key] || ''))"
         />
         <template v-else>
           {{
