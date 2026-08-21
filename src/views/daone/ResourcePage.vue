@@ -44,13 +44,14 @@ const batchUpload = useBatchMediaUpload({
 // 通知页空闲预取 wangEditor，降低首次打开编辑器成本（不进入首屏关键路径）
 onMounted(() => {
   if (resourceKey.value !== "notifications") return;
+  if (typeof window === "undefined") return;
   const prefetch = () => {
     void loadResourceRichTextEditor();
   };
-  if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+  if (typeof window.requestIdleCallback === "function") {
     window.requestIdleCallback(prefetch, { timeout: 2500 });
   } else {
-    window.setTimeout(prefetch, 800);
+    setTimeout(prefetch, 800);
   }
 });
 const crud = useResourceCrud({ resourceKey, form, list, batchUpload });
