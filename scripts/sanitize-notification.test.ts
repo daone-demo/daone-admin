@@ -1,35 +1,34 @@
 /**
- * P1-01：通知 HTML 清洗回归（管理端 sanitizeNotificationHtml）。
+ * 通知 HTML 清洗回归（管理端 sanitizeNotificationHtml）。
  * 运行：node --experimental-strip-types --test scripts/sanitize-notification.test.ts
  *
- * 使用 jsdom + isomorphic-dompurify 风格不可用时，这里用动态 import 浏览器包会失败。
- * 因此本测试直接复刻白名单策略的关键断言，并在有 DOMPurify 时跑完整套件。
+ * 必须在真实 DOM（jsdom）下加载生产 DOMPurify 模块；环境或模块不可用时测试失败，
+ * 禁止静默降级为正则替代实现。
  */
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
 async function loadSanitize(): Promise<(html: string) => string> {
-  try {
-    // happy-dom / jsdom 可能未装；优先尝试真实模块
-    const { Window } = await import("happy-dom");
-    const window = new Window();
-    (globalThis as any).window = window;
-    (globalThis as any).document = window.document;
-    (globalThis as any).DOMParser = window.DOMParser;
-    (globalThis as any).Node = window.Node;
-    (globalThis as any).Element = window.Element;
-    const mod = await import("../src/utils/sanitizeHtml.ts");
-    return mod.sanitizeNotificationHtml;
-  } catch {
-    // 无 DOM 环境时跳过真实 DOMPurify，改用内联最小净化验证契约
-    return (html: string) => {
-      return String(html)
-        .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, "")
-        .replace(/\son\w+\s*=\s*(['"]).*?\1/gi, "")
-        .replace(/javascript:/gi, "")
-        .replace(/data:/gi, "");
-    };
+  const { JSDOM } = await import("jsdom");
+  const dom = new JSDOM("<!DOCTYPE html><html><body></body></html>");
+  const { window } = dom;
+
+  globalThis.window = window as unknown as Window & typeof globalThis;
+  globalThis.document = window.document;
+  globalThis.DOMParser = window.DOMParser;
+  globalThis.NodeFilter = window.NodeFilter;
+  globalThis.Node = window.Node;
+  globalThis.Element = window.Element;
+  globalThis.HTMLElement = window.HTMLElement;
+  globalThis.DocumentFragment = window.DocumentFragment;
+  (globalThis as any).NamedNodeMap = window.NamedNodeMap;
+
+  // 确保每次测试加载的是生产清洗实现，而非缓存的失败桩
+  const mod = await import("../src/utils/sanitizeHtml.ts");
+  if (typeof mod.sanitizeNotificationHtml !== "function") {
+    throw new Error("sanitizeNotificationHtml 未从生产模块导出");
   }
+  return mod.sanitizeNotificationHtml;
 }
 
 test("strips script and event handlers", async () => {

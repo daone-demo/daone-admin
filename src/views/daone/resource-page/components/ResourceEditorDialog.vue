@@ -4,17 +4,22 @@ import type { BatchMediaItem } from "../useBatchMediaUpload";
 import type { PlanPriceFormItem } from "../planPriceForm";
 import type { ModelPricingConfig } from "../modelPricing";
 import { hasModelPricingTable } from "../modelPricing";
-import { defineAsyncComponent } from "vue";
+import { defineAsyncComponent, watch } from "vue";
 import BatchMediaUploadField from "./BatchMediaUploadField.vue";
 import PlanPricesEditor from "./PlanPricesEditor.vue";
 import ModelPricingEditor from "./ModelPricingEditor.vue";
 import SingleMediaUploadField from "./SingleMediaUploadField.vue";
+import ResourceRichTextEditorLoading from "./ResourceRichTextEditorLoading.vue";
+import { loadResourceRichTextEditor } from "./loadResourceRichTextEditor";
 
-const ResourceRichTextEditor = defineAsyncComponent(
-  () => import("./ResourceRichTextEditor.vue")
-);
+const ResourceRichTextEditor = defineAsyncComponent({
+  loader: loadResourceRichTextEditor,
+  loadingComponent: ResourceRichTextEditorLoading,
+  delay: 60,
+  suspensible: false
+});
 
-defineProps<{
+const props = defineProps<{
   config: ResourceConfig;
   resourceKey: string;
   editingId: string;
@@ -45,6 +50,17 @@ defineProps<{
 }>();
 
 const visible = defineModel<boolean>("visible", { required: true });
+
+// 弹窗打开且含富文本字段时预取编辑器 chunk，缩短感知等待
+watch(
+  () =>
+    visible.value &&
+    props.editorFields.some(field => field.type === "richtext"),
+  shouldPrefetch => {
+    if (shouldPrefetch) void loadResourceRichTextEditor();
+  },
+  { immediate: true }
+);
 
 // 表单值通过 update:form-value 事件回传父级统一写入，子组件不直接修改 form prop
 defineEmits<{

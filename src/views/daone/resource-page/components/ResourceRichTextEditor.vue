@@ -9,6 +9,7 @@ import type {
 import "@wangeditor/editor/dist/css/style.css";
 import { ElMessage } from "element-plus";
 import { adminApi } from "@/api/admin";
+import { sanitizeNotificationHtml } from "@/utils/sanitizeHtml";
 
 const props = defineProps<{
   modelValue: string;
@@ -21,12 +22,13 @@ const emit = defineEmits<{
 }>();
 
 const editorRef = shallowRef<IDomEditor>();
-const html = ref(props.modelValue || "");
+/** 载入历史 HTML 前先走与展示端一致的清洗契约 */
+const html = ref(sanitizeNotificationHtml(props.modelValue || ""));
 
 watch(
   () => props.modelValue,
   value => {
-    const next = value || "";
+    const next = sanitizeNotificationHtml(value || "");
     if (next === html.value) return;
     html.value = next;
   }

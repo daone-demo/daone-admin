@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, reactive } from "vue";
+import { computed, defineAsyncComponent, onMounted, reactive } from "vue";
 import { useRoute } from "vue-router";
 import { formatDateTime, isDateTimeField } from "@/utils/date";
 import ResourcePageHero from "./resource-page/components/ResourcePageHero.vue";
 import ResourceToolbar from "./resource-page/components/ResourceToolbar.vue";
 import ResourceTable from "./resource-page/components/ResourceTable.vue";
 import ResourceEditorDialog from "./resource-page/components/ResourceEditorDialog.vue";
+import { loadResourceRichTextEditor } from "./resource-page/components/loadResourceRichTextEditor";
 import ResourceDetailDrawer from "./resource-page/components/ResourceDetailDrawer.vue";
 import UserPointsDialog from "./resource-page/components/UserPointsDialog.vue";
 import {
@@ -38,6 +39,19 @@ const batchUpload = useBatchMediaUpload({
   resourceKey,
   form,
   isMaterialResource: list.isMaterialResource
+});
+
+// 通知页空闲预取 wangEditor，降低首次打开编辑器成本（不进入首屏关键路径）
+onMounted(() => {
+  if (resourceKey.value !== "notifications") return;
+  const prefetch = () => {
+    void loadResourceRichTextEditor();
+  };
+  if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+    window.requestIdleCallback(prefetch, { timeout: 2500 });
+  } else {
+    window.setTimeout(prefetch, 800);
+  }
 });
 const crud = useResourceCrud({ resourceKey, form, list, batchUpload });
 
