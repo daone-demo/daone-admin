@@ -25,7 +25,8 @@ import {
 import {
   cloneModelPricing,
   hasModelPricingTable,
-  hasPricingModels
+  hasPricingModels,
+  mergeModelAttributesWithPricing
 } from "./modelPricing";
 import { sanitizeNotificationHtml } from "@/utils/sanitizeHtml";
 
@@ -291,9 +292,10 @@ export const useResourceCrud = (options: UseResourceCrudOptions) => {
       };
 
       if (useTablePricing && form.pricing) {
-        payload.attributes = {
-          pricing: cloneModelPricing(form.pricing)
-        };
+        payload.attributes = mergeModelAttributesWithPricing(
+          current.value?.attributes,
+          form.pricing
+        );
       }
 
       if (!editingId.value) {

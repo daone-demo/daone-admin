@@ -53,6 +53,26 @@ export function cloneModelPricing(
   }
 }
 
+/**
+ * PUT 模型配置时合并 attributes：保留既有键，仅覆盖 pricing。
+ * 避免服务端按整体替换语义时丢失其他 attributes 字段。
+ */
+export function mergeModelAttributesWithPricing(
+  existingAttributes: unknown,
+  pricing: ModelPricingConfig
+): Record<string, unknown> {
+  const base =
+    existingAttributes &&
+    typeof existingAttributes === "object" &&
+    !Array.isArray(existingAttributes)
+      ? { ...(existingAttributes as Record<string, unknown>) }
+      : {};
+  return {
+    ...base,
+    pricing: cloneModelPricing(pricing)
+  };
+}
+
 function resolveModelLabel(
   modelKey: string,
   parameterModels?: ParameterModelOption[]
